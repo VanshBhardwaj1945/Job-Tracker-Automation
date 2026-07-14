@@ -1,6 +1,11 @@
-# Full Documentation — Job Tracker Automation
+# How I Built It — Job Tracker Automation
 
 <img src="architecture.png" width="1000" alt="Cloud architecture">
+
+> The deep-dive for anyone (recruiters, engineers, the curious) who wants to see
+> **every decision I made and why** — architecture, the security model, cost
+> engineering, and trade-offs. If you just want to run it, see
+> **[Set it up yourself](SETUP.md)**.
 
 This document explains what the system is, how it's built, and — more usefully —
 *why* it's built this way. The design goal throughout: a personal, always-on

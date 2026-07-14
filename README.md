@@ -6,7 +6,23 @@
 
 > I built this because I hated last summer's internship hunt — hundreds of tabs, copy-pasting the same resume, missing postings because I saw them a day late. I wanted one place that did the finding, the tailoring, and the tracking for me, and that I could open from my phone, my school laptop, anywhere.
 
-**[Full documentation & design decisions →](docs/FULL_DOCUMENTATION.md)**
+**Two deep-dives:** &nbsp; **[How I built it (design decisions) →](docs/HOW_I_BUILT_IT.md)** &nbsp;·&nbsp; **[Set it up yourself →](docs/SETUP.md)**
+
+## Preview
+
+The dashboard (dark, Linear-inspired, installable as a PWA). Job/company data is blurred for privacy.
+
+**Tracker** — every found role, AI-matched and triaged into apply-now tiers:
+
+<img src="docs/screenshots/dashboard-tracker.png" width="900" alt="Tracker">
+
+**Analytics** — pipeline funnel, category mix, the tools/keywords showing up in roles you chase, plus live Claude token spend and prompt-cache hit rate:
+
+<img src="docs/screenshots/dashboard-analytics.png" width="900" alt="Analytics">
+
+**Activity** — what the automations have been doing: GitHub Actions runs, heartbeats, and a job-event feed:
+
+<img src="docs/screenshots/dashboard-activity.png" width="900" alt="Activity">
 
 ---
 
@@ -50,6 +66,24 @@ A production-shaped, serverless, AI-driven system — not a tutorial. Every piec
                                                        interview prep / answers (Opus)
   Gmail (IMAP) ──► Gmail watcher ──► classifies application emails ──► timeline + auto phase flip
 ```
+
+## How it targets what you want
+
+You define who you are and what you're after in one profile file: a **ranked list of the
+companies and role types you're targeting** (each weighted by how much you want it), the
+keywords that describe your field, and a short summary of your background. From that:
+
+- **It watches your list directly** — every company you name is probed for its applicant-tracking
+  system and scraped at the source.
+- **It also casts a much wider net** — a crowd-sourced feed plus ATS discovery surface *extra*
+  roles from companies you never listed, so you don't miss something good just because it wasn't on
+  your radar.
+- **Then it weighs everything against you** — every posting is scored 0–10 against your profile and
+  ranked, so the best-fit roles float to the top and the noise sinks. Your weighted preferences
+  anchor the scoring; the AI does the judgment on each individual posting.
+
+The result: you tell it your targets once, and it keeps finding both those *and* the ones you'd
+have wished you'd seen — already sorted by how well they fit you.
 
 ## Run it your way
 
