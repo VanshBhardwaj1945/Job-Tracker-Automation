@@ -4,7 +4,7 @@
 // posting names — the analytics view aggregates those into project-idea signal.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { CATEGORIES, normalizeCategory, type Category } from "./types";
+import { normalizeCategory, normalizeCategories, catPath, TAXONOMY, CAT_CHILDREN, CAT_BY_ID, type Category } from "./types";
 import { fetchUrlText, parseJobText, FORM_JUNK_RE } from "./parse";
 import { logUsage } from "./usage";
 
@@ -87,7 +87,8 @@ export interface MatchResult {
   skills: string[];
   likeability: number | null;
   company_blurb: string;
-  category: Category;
+  category: Category;       // primary leaf (back-compat)
+  categories: string[];    // all assigned leaf ids
 }
 
 let profileCache: { text: string; at: number } | null = null;
@@ -150,24 +151,37 @@ For EACH job the user sends, return:
 - "company_blurb": ≤ 40 words — what the company actually does, and what this role's team
   likely works on ("Palantir builds data-integration platforms for defense/intel; FDSE
   interns ship customer-facing pipelines and apps on Foundry/Gotham.").
-- "category": one of {CATS}.
-  iam=identity/access/IAM, detection=SOC/IR/detection/threat/EDR/hunting, appsec=appsec/prodsec/DevSecOps,
-  cloud_sec=cloud/platform security, ai_sec=AI/LLM/ML security, security=other security/infosec/GRC,
-  swe_infra=SWE infra/platform/SRE/DevOps/backend, swe_fullstack=frontend/fullstack/mobile/
-  web-product SWE, swe_data=data engineering/ML/AI SWE (non-security), swe_other=QA/embedded/
-  hardware/misc SWE, other=everything else. Use swe_other ONLY when no other bucket fits.
+- "categories": an array of 1-3 of the LEAF ids below that best fit — the DEEPEST/most
+  specific leaves, not the parents. A job can span multiple branches: a security-flavored
+  SRE role → ["inf_sre","cld_platform"]; an IAM detection role → ["iam_iga","det_eng"].
+  Pick the single best if it's clearly one thing. Use only leaf ids from this list:
+{CAT_GUIDE}
 
 Return ONLY a JSON array, one object per job, same order as sent:
 [{{"i": 0, "match_score": 8, "match_reason": "...", "skills": ["..."], "likeability": 7,
-  "company_blurb": "...", "category": "iam"}}]
+  "company_blurb": "...", "categories": ["iam_iga"]}}]
 No markdown, no explanation.`;
+
+// A compact leaf reference for the prompt: "leaf_id — Top > Mid > Leaf label".
+function catGuide(): string {
+  const lines: string[] = [];
+  for (const top of TAXONOMY.filter((n) => !n.parent)) {
+    for (const midId of CAT_CHILDREN[top.id] ?? []) {
+      const mid = CAT_BY_ID[midId];
+      const leaves = CAT_CHILDREN[midId];
+      if (!leaves) { lines.push(`  ${midId} — ${top.label} > ${mid.label}`); continue; }
+      for (const leafId of leaves) lines.push(`  ${leafId} — ${top.label} > ${mid.label} > ${CAT_BY_ID[leafId].label}`);
+    }
+  }
+  return lines.join("\n");
+}
 
 /** The cached system prefix (profile + rubric) — shared by the sync and batch
  *  paths so the scoring logic never drifts between them. */
 export function buildMatchSystem(profile: string): string {
   return SYSTEM_PROMPT
     .replace("{PROFILE}", profile.slice(0, 40000))
-    .replace("{CATS}", CATEGORIES.join(", "));
+    .replace("{CAT_GUIDE}", catGuide());
 }
 
 /** The per-job user payload the model scores. */
@@ -198,7 +212,10 @@ export function normalizeMatchItem(item: Record<string, unknown>, job: MatchInpu
     likeability: Number.isFinite(Number(item.likeability))
       ? Math.min(10, Math.max(1, Number(item.likeability))) : null,
     company_blurb: String(item.company_blurb ?? "").slice(0, 400),
-    category: normalizeCategory(item.category),
+    ...(() => {
+      const cats = normalizeCategories(item.categories ?? item.category);
+      return { category: cats[0], categories: cats };
+    })(),
   };
 }
 
@@ -246,12 +263,13 @@ export async function applyMatches(db: D1Database, results: MatchResult[]): Prom
   if (!results.length) return;
   const stmt = db.prepare(
     `UPDATE jobs SET match_score = ?, match_reason = ?, skills = ?, category = ?,
-     likeability = ?, company_blurb = ?, updated_at = ? WHERE id = ?`
+     categories = ?, cat_path = ?, likeability = ?, company_blurb = ?, updated_at = ? WHERE id = ?`
   );
   const ts = new Date().toISOString();
   await db.batch(
     results.map((r) =>
       stmt.bind(r.match_score, r.match_reason, JSON.stringify(r.skills), r.category,
+                JSON.stringify(r.categories), catPath(r.categories),
                 r.likeability, r.company_blurb, ts, r.id)
     )
   );

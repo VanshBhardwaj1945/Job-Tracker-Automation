@@ -100,6 +100,20 @@ postings continue), plus a normalized company+title key in the tracker so the
 same role found on two boards — or found by the monitor *and* added by hand —
 collapses to a single row.
 
+**A hierarchical category taxonomy.** Categories aren't a flat list — they're a
+three-level tree (top → mid → leaf, e.g. *Security → IAM/Identity → IGA*). The
+AI tags each job with one or more **leaf** ids (a job can genuinely be several
+things at once — a security-flavored SRE role is both), and every tag **rolls
+up** its ancestors. I store that rollup as a space-delimited ancestor-closure
+string (`cat_path`) so a single SQL `LIKE` filters at *any* level — asking for
+"SWE" matches every SWE leaf without enumerating them. The same closure powers
+the analytics: skill/buzzword frequencies and job counts aggregate to whichever
+node you select, and the dashboard's filter is a **tri-state tree** (tick a
+parent to take its whole subtree; untick one child and the siblings stay).
+Because the taxonomy lives in one file and is served to the UI over an endpoint,
+there's a single source of truth — no drift between the model prompt, the SQL,
+and the front-end.
+
 ## 5. The AI pipeline (applied LLM engineering)
 
 Claude does the judgment work; the deterministic filters are the cheap coarse
@@ -125,6 +139,15 @@ net. Key decisions:
   generation checks the day's spend against a configurable cap and refuses
   cleanly if exceeded. The dashboard surfaces spend + cache-hit rate so cost is
   never a mystery.
+- **A cost analytics center.** Claude spend is reconstructed per-day from the
+  token-usage log (priced per model), and flat cloud costs (Cloudflare, Azure)
+  are configured once as a monthly figure and spread across days. The dashboard
+  charts a 60-day spend series you can toggle by provider or any mix — so a spike
+  is obvious and attributable, not a surprise on a bill.
+- **Auto-learning skill set.** The "tools you have vs should learn" view unions
+  your curated skill list with anything the market's postings mention that
+  already appears verbatim in your synced profile — so as the résumé grows, newly
+  acquired tools count as "have" without hand-editing a list.
 - **Document generation.** Per job, Opus drafts a resume, cover letter,
   interview-prep sheet, or application answers — grounded strictly in the user's
   real materials (resume, optional GitHub repos, optional site). Resumes export

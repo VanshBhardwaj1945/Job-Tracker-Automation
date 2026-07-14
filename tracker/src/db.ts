@@ -1,6 +1,8 @@
 // D1 schema, self-migrating. Terraform can't run SQL, so the worker applies
 // versioned migrations on cold start (once per isolate).
 
+import { normalizeCategory, catPath } from "./types";
+
 const MIGRATIONS: string[][] = [
   [
     `CREATE TABLE IF NOT EXISTS jobs (
@@ -87,6 +89,12 @@ const MIGRATIONS: string[][] = [
     )`,
     `CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage_log(ts)`,
   ],
+  // v7: hierarchical multi-category. `categories` = JSON array of leaf ids;
+  // `cat_path` = space-delimited ancestor closure for SQL-LIKE rollup filtering.
+  [
+    `ALTER TABLE jobs ADD COLUMN categories TEXT NOT NULL DEFAULT '[]'`,
+    `ALTER TABLE jobs ADD COLUMN cat_path TEXT NOT NULL DEFAULT ''`,
+  ],
 ];
 
 let migrated = false;
@@ -109,5 +117,20 @@ export async function ensureSchema(db: D1Database): Promise<void> {
       .bind(v, new Date().toISOString())
       .run();
   }
+  await backfillCategories(db);
   migrated = true;
+}
+
+/** One-time: seed categories/cat_path from the legacy single `category` for rows
+ *  the AI hasn't re-tagged yet. Cheap (guarded by cat_path = ''). */
+async function backfillCategories(db: D1Database): Promise<void> {
+  const rows = await db
+    .prepare("SELECT id, category FROM jobs WHERE cat_path = '' LIMIT 500")
+    .all<{ id: string; category: string }>();
+  if (!rows.results.length) return;
+  const stmt = db.prepare("UPDATE jobs SET categories = ?, cat_path = ? WHERE id = ?");
+  await db.batch(rows.results.map((r) => {
+    const node = normalizeCategory(r.category);
+    return stmt.bind(JSON.stringify([node]), catPath([node]), r.id);
+  }));
 }

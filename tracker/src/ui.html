@@ -159,6 +159,32 @@
   .msel-opt input { width: 14px; height: 14px; accent-color: var(--accent); margin: 0; }
   .msel-foot { border-top: 1px solid var(--stroke); margin-top: 4px; padding: 6px 8px 2px; }
   .msel-foot .out { font-size: 11.5px; cursor: pointer; }
+  /* tri-state category tree */
+  .ctree { max-height: 320px; overflow-y: auto; min-width: 250px; }
+  .ctree .cnode { user-select: none; }
+  .ctree .crow { display: flex; align-items: center; gap: 7px; padding: 4px 6px; border-radius: 5px;
+    font-size: 12.5px; cursor: pointer; }
+  .ctree .crow:hover { background: var(--surface3); }
+  .ctree .ctog { width: 14px; text-align: center; color: var(--dim); flex: none; cursor: pointer;
+    transition: transform .12s var(--ease); font-size: 10px; }
+  .ctree .ctog.open { transform: rotate(90deg); }
+  .ctree .ctog.leaf { visibility: hidden; }
+  .ctree .cbox { width: 14px; height: 14px; border: 1.5px solid var(--stroke2); border-radius: 4px;
+    flex: none; display: inline-flex; align-items: center; justify-content: center; color: #fff; }
+  .ctree .cbox.on { background: var(--accent); border-color: var(--accent); }
+  .ctree .cbox.part { background: var(--accent-soft); border-color: var(--accent); }
+  .ctree .cbox svg { width: 11px; height: 11px; }
+  .ctree .clabel { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctree .ccount { color: var(--dim); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .ctree .ckids { margin-left: 15px; border-left: 1px solid var(--stroke); padding-left: 3px; }
+  /* cost-center provider toggles */
+  .ctoggle { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; cursor: pointer;
+    border: 1px solid var(--stroke); border-radius: 999px; font-size: 12px; color: var(--muted);
+    user-select: none; transition: border-color .12s var(--ease), color .12s var(--ease), background .12s var(--ease); }
+  .ctoggle:hover { border-color: var(--stroke2); }
+  .ctoggle.on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+  .ctoggle .dot { width: 8px; height: 8px; border-radius: 50%; opacity: .35; }
+  .ctoggle.on .dot { opacity: 1; }
   /* inline line icons + status dots */
   svg.i { width: 15px; height: 15px; flex: none; vertical-align: -3px; }
   button svg.i { margin-right: 5px; }
@@ -196,15 +222,11 @@
   .pill { display: inline-block; font-size: 10.5px; font-weight: 500; padding: 2px 8px;
           border-radius: 5px; letter-spacing: 0; background: var(--surface3);
           border: 1px solid var(--stroke); color: var(--muted); white-space: nowrap; }
-  .pill.iam { color: var(--amber); border-color: rgba(251,191,36,.3); background: rgba(251,191,36,.08); }
-  .pill.detection { color: var(--violet); border-color: rgba(168,85,247,.3); background: rgba(168,85,247,.08); }
-  .pill.appsec { color: var(--green); border-color: rgba(52,211,153,.3); background: rgba(52,211,153,.08); }
-  .pill.cloud_sec { color: var(--cyan); border-color: rgba(34,211,238,.3); background: rgba(34,211,238,.08); }
-  .pill.ai_sec { color: var(--pink); border-color: rgba(236,72,153,.3); background: rgba(236,72,153,.08); }
-  .pill.security { color: var(--red); border-color: rgba(248,113,113,.3); background: rgba(248,113,113,.08); }
-  .pill.swe_infra { color: var(--blue); border-color: rgba(96,165,250,.3); background: rgba(96,165,250,.08); }
-  .pill.swe_fullstack { color: #f472b6; border-color: rgba(244,114,182,.3); background: rgba(244,114,182,.08); }
-  .pill.swe_data { color: #38bdf8; border-color: rgba(56,189,248,.3); background: rgba(56,189,248,.08); }
+  /* Category pills — monochrome (jobs live in several categories, so no color
+     scheme), but with a subtle accent edge so they still pop off the surface. */
+  .pill.cat { color: var(--text); background: var(--surface3);
+    border-color: var(--stroke2); box-shadow: inset 2px 0 0 var(--accent); padding-left: 9px; }
+  .pill.cat.more { color: var(--muted); box-shadow: none; padding-left: 8px; }
   .pill.newco { color: var(--cyan); border-color: rgba(34,211,238,.35); background: rgba(34,211,238,.08);
                 font-size: 9.5px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; }
   .match { font-weight: 700; font-size: 12.5px; white-space: nowrap; }
@@ -650,13 +672,46 @@ const PHASE_LABEL = { found:"Found", applied:"Applied", oa:"OA / Quiz", intervie
 const PHASE_COLOR = { found:"#8a8f98", applied:"#5e8bd6", oa:"#efc75e", interview:"#9b8cf0",
   offer:"#4cb782", accepted:"#4cb782", rejected:"#eb5757", withdrawn:"#eb5757",
   not_applying:"#5b5f66", archived:"#5b5f66" };
-const CATS = { iam:"IAM / Identity", detection:"Detection / SOC / IR", appsec:"AppSec / DevSecOps",
-  cloud_sec:"Cloud Security", ai_sec:"AI Security", security:"Security (general)",
-  swe_infra:"SWE: Infra / Platform", swe_fullstack:"SWE: Fullstack / Web",
-  swe_data:"SWE: Data / ML", swe_other:"SWE: Other", other:"Other" };
-const CAT_COLORS = { iam:"#efc75e", detection:"#9b8cf0", appsec:"#4cb782", cloud_sec:"#56b6d8",
-  ai_sec:"#e06fae", security:"#eb5757", swe_infra:"#6493e6", swe_fullstack:"#e06fae",
-  swe_data:"#56b6d8", swe_other:"#8a8f98", other:"#5b5f66" };
+// ── Hierarchical category taxonomy (loaded from /api/taxonomy at boot) ──────
+// A job carries one or more LEAF ids in `categories`, and rolls up: a job tagged
+// `inf_sre` also belongs to `swe_infra` and `swe`. These maps drive the pills,
+// the tri-state tree filter, and the analytics rollup — one source of truth.
+let TAX_NODES = [];                 // [{id,label,parent}]
+const CATS = {};                    // id → label
+const CAT_PARENT = {};              // id → parent id | null
+const CAT_KIDS = {};                // id → [child ids]
+let CAT_ROOTS = [];                 // top-level node ids
+let CAT_LEAVES = [];                // leaf ids
+function catLeavesUnder(id) {       // id + descendants, leaves only
+  const kids = CAT_KIDS[id] || [];
+  if (!kids.length) return [id];
+  return kids.flatMap(catLeavesUnder);
+}
+function catLabel(id) { return CATS[id] || id; }
+function jobCats(j) {                // a job's leaf ids (parse JSON, fall back to legacy single)
+  let arr = j.categories;
+  if (typeof arr === "string") { try { arr = JSON.parse(arr); } catch { arr = []; } }
+  if (!Array.isArray(arr) || !arr.length) arr = j.category ? [j.category] : [];
+  return arr.filter(Boolean);
+}
+function catPills(j, max) {          // monochrome leaf pills, "+N" overflow, title lists the rest
+  const ids = jobCats(j); if (!ids.length) return '<span class="loc">—</span>';
+  const show = ids.slice(0, max);
+  let html = show.map(id => `<span class="pill cat">${esc(catLabel(id))}</span>`).join(" ");
+  if (ids.length > show.length) {
+    const rest = ids.slice(max).map(catLabel).join(", ");
+    html += ` <span class="pill cat more" title="${esc(rest)}">+${ids.length - show.length}</span>`;
+  }
+  return html;
+}
+async function loadTaxonomy() {
+  const { nodes, labels } = await apiCall("/taxonomy");
+  TAX_NODES = nodes;
+  for (const n of nodes) { CATS[n.id] = labels[n.id] || n.id; CAT_PARENT[n.id] = n.parent;
+    if (n.parent) (CAT_KIDS[n.parent] ??= []).push(n.id); }
+  CAT_ROOTS = nodes.filter(n => !n.parent).map(n => n.id);
+  CAT_LEAVES = nodes.filter(n => !(CAT_KIDS[n.id] || []).length).map(n => n.id);
+}
 const TABS = [
   { key:"top", label:"Top applicant", tier:"top" },
   { key:"rec", label:"Recommended", tier:"rec" },
@@ -713,7 +768,9 @@ const skelCards = (n = 6) =>
   '<div class="kpis">' + Array.from({ length: 5 }, () => '<div class="skel" style="height:82px"></div>').join("") + '</div>' +
   '<div class="grid">' + Array.from({ length: n }, () => '<div class="skel skel-card"></div>').join("") + '</div>';
 const state = { page:"tracker", tab:"top", q:"", sort:"rank", watchlist:"",
-                cats:[], catEx:false, terms:[], termEx:false, terms_all:[],
+                cats:[], catEx:false, catSel:new Set(), // catSel = selected LEAF ids; cats = query cover
+                terms:[], termEx:false, terms_all:[],
+                anScope:"all", // analytics scope
                 counts:{}, recommended:0, jobs:[] };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
@@ -839,7 +896,7 @@ function renderRows() {
         <div class="loc">${esc(j.location) || "—"}</div>
         ${j.match_reason ? `<div class="reason">↳ ${esc(j.match_reason)}</div>` : ""}
       </td>
-      <td class="hide-sm"><span class="pill ${esc(j.category)}">${CATS[j.category] || esc(j.category)}</span></td>
+      <td class="hide-sm">${catPills(j, 1)}</td>
       <td>${matchHtml(j)}</td>
       <td class="hide-sm">${j.likeability != null ? `<span class="match ${j.likeability >= 8 ? "m-hi" : j.likeability >= 5 ? "m-mid" : "m-lo"}" title="Company desirability (pay · prestige · brand)">${icon('gem')} ${j.likeability}</span>` : '<span class="loc">—</span>'}</td>
       <td class="hide-sm date">${j.term ? esc(j.term) : "Unknown"}</td>
@@ -935,6 +992,31 @@ function areaSvg(points, w = 560, h = 150, color = "#818cf8") {
     ${dots}${labels}</svg>`;
 }
 
+// Overlaid multi-series area chart (cost center). series = [{day, k1, k2...}],
+// lines = [{key, label, color}]. Shows spend spikes per provider over time.
+function multiAreaSvg(series, lines, w = 900, h = 190) {
+  if (!series.length) return '<div class="hint">No spend recorded yet.</div>';
+  const pad = 8, ih = h - 30, iw = w - pad * 2;
+  const max = Math.max(0.0001, ...series.flatMap(r => lines.map(l => r[l.key] || 0)));
+  const x = i => pad + (iw * i) / Math.max(1, series.length - 1);
+  const y = v => 8 + ih - (ih * v) / max;
+  const paths = lines.map(l => {
+    const pts = series.map((r, i) => [x(i), y(r[l.key] || 0)]);
+    const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const area = line + ` L${x(series.length - 1).toFixed(1)} ${(8 + ih).toFixed(1)} L${x(0).toFixed(1)} ${(8 + ih).toFixed(1)} Z`;
+    return `<defs><linearGradient id="cg${l.key}" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="${l.color}" stop-opacity=".28"/>
+        <stop offset="100%" stop-color="${l.color}" stop-opacity="0"/></linearGradient></defs>
+      <path d="${area}" fill="url(#cg${l.key})"/>
+      <path d="${line}" fill="none" stroke="${l.color}" stroke-width="2" stroke-linejoin="round"/>`;
+  }).join("");
+  const ticks = [0, Math.floor(series.length / 2), series.length - 1].map(i =>
+    `<text x="${x(i).toFixed(1)}" y="${h - 6}" fill="var(--dim)" font-size="9" text-anchor="middle">${series[i].day.slice(5)}</text>`).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" preserveAspectRatio="none" style="display:block">
+    <line x1="${pad}" y1="${(8+ih).toFixed(1)}" x2="${w-pad}" y2="${(8+ih).toFixed(1)}" stroke="var(--stroke)"/>
+    ${paths}${ticks}</svg>`;
+}
+
 function bars(rows, lblKey, valKey, cls = "") {
   const max = Math.max(1, ...rows.map(r => r[valKey]));
   return rows.map(r => `
@@ -959,10 +1041,17 @@ async function loadAnalytics() {
   const active = (s.phases.applied || 0) + (s.phases.oa || 0) + (s.phases.interview || 0) + (s.phases.offer || 0);
   const funnel = ["found","applied","oa","interview","offer","accepted"]
     .map(p => ({ label: PHASE_LABEL[p], n: s.phases[p] || 0 }));
-  const catItems = s.categories.filter(r => r.n > 0).map(r => ({
-    label: CATS[r.category] || r.category, n: r.n, color: CAT_COLORS[r.category] || "#6b7280" }));
-  const catApplied = s.categories.filter(r => r.applied > 0).map(r => ({
-    label: CATS[r.category] || r.category, n: r.applied }));
+  // Rolled-up per-node counts (cat_counts). Charts use the MID level so
+  // multi-category jobs aggregate into meaningful groups.
+  const cc = s.cat_counts || {};
+  const midNodes = CAT_ROOTS.flatMap(r => CAT_KIDS[r] || []);
+  const shade = (i, n) => `hsl(222 12% ${Math.round(72 - 42 * (i / Math.max(1, n - 1)))}%)`; // monochrome ramp, pops on dark
+  const catItems = midNodes.filter(id => (cc[id]?.n || 0) > 0)
+    .sort((a,b) => (cc[b].n) - (cc[a].n))
+    .map((id, i, arr) => ({ label: catLabel(id), n: cc[id].n, color: shade(i, arr.length) }));
+  const catApplied = midNodes.filter(id => (cc[id]?.applied || 0) > 0)
+    .map(id => ({ label: catLabel(id), n: cc[id].applied }))
+    .sort((a,b) => b.n - a.n);
   const weekly = s.weekly.map(w => ({ label: w.wk.slice(5), n: w.n }));
   const monthly = s.monthly.map(m => ({ label: m.mo, n: m.n }));
   const hist = s.match_histogram.filter(h => h.s >= 0).map(h => ({ label: `${h.s}/10`, n: h.n }));
@@ -1037,6 +1126,12 @@ async function loadAnalytics() {
         ${bars(s.locations.map(x => ({label:x.location, n:x.n})), "label", "n", "alt")}</div>
       <div class="glass card"><h3>Match score distribution</h3>${bars(hist, "label", "n")}</div>
       <div class="glass card"><h3>Applications per month</h3>${areaSvg(monthly, 560, 140, "#22d3ee")}</div>
+      <div class="glass card" style="grid-column: 1 / -1"><h3>Cost center
+          <span class="sub">spend over time by provider — toggle any mix to spot spikes</span></h3>
+        <div class="row2" id="costToggles" style="margin-bottom:10px; flex-wrap:wrap"></div>
+        <div id="costChart"></div>
+        <div class="row2" id="costTotals" style="margin-top:10px; flex-wrap:wrap; gap:18px"></div>
+      </div>
       <div class="glass card"><h3>Claude usage
         <span class="sub">prompt-cache savings & estimated spend by endpoint</span></h3>
         <div class="hint" style="margin-bottom:8px">
@@ -1046,15 +1141,55 @@ async function loadAnalytics() {
     </div>`;
 
   // ── interactive Tools & buzzwords (scope + have/missing) ──
+  // Scope picker is the taxonomy, DFS-ordered & indented — pick any level and the
+  // server's cat_path rollup gives that node's whole subtree (parent = all kids).
   const scopeSel = $("skScope");
-  const catsWithSkills = Object.keys(s.skills.by_category || {})
-    .filter(c => (s.skills.by_category[c] || []).length)
-    .sort((a,b) => (CATS[a]||a).localeCompare(CATS[b]||b));
-  scopeSel.innerHTML = '<option value="all">All jobs</option><option value="applied">Applied jobs</option>'
-    + catsWithSkills.map(c => `<option value="cat:${c}">${esc(CATS[c] || c)}</option>`).join("");
+  const byCat = s.skills.by_category || {};
+  const opts = ['<option value="all">All jobs</option>', '<option value="applied">Applied jobs</option>'];
+  const pad = (d) => "  ".repeat(d);
+  const walkScope = (id, depth) => {
+    const has = (byCat[id] || []).length;
+    const kidsHave = catLeavesUnder(id).some(l => (byCat[l] || []).length);
+    if (has || kidsHave) opts.push(`<option value="cat:${id}"${has ? "" : " disabled"}>${pad(depth)}${esc(catLabel(id))}${has ? ` · ${byCat[id].length}` : ""}</option>`);
+    (CAT_KIDS[id] || []).forEach(k => walkScope(k, depth + 1));
+  };
+  CAT_ROOTS.forEach(r => walkScope(r, 0));
+  scopeSel.innerHTML = opts.join("");
   scopeSel.onchange = () => renderSkillView(scopeSel.value);
   $("skEdit").onclick = editKnownSkills;
   renderSkillView("all");
+
+  renderCostCenter();
+}
+
+// Cost analytics center: pick any mix of providers, see spend over time + totals.
+const COST_LINES = [
+  { key:"claude", label:"Claude (API)", color:"#a78bfa" },
+  { key:"cloudflare", label:"Cloudflare", color:"#f6821f" },
+  { key:"azure", label:"Azure", color:"#3b82f6" },
+];
+const costOn = new Set(["claude","cloudflare","azure"]);
+function renderCostCenter() {
+  const s = _stats, u = s.usage || {};
+  const series = u.spend_daily || [];
+  const prov = u.providers || {};
+  const money = n => "$" + (n||0).toFixed((n||0) < 1 ? 4 : 2);
+  const configured = { claude: (prov.claude?.total || 0) > 0,
+    cloudflare: (prov.cloudflare?.monthly || 0) > 0, azure: (prov.azure?.monthly || 0) > 0 };
+  $("costToggles").innerHTML = COST_LINES.map(l =>
+    `<span class="ctoggle ${costOn.has(l.key) ? "on" : ""}" data-k="${l.key}">
+       <span class="dot" style="background:${l.color}"></span>${esc(l.label)}
+       ${configured[l.key] ? "" : '<span class="hint" style="font-size:9.5px">· set in meta</span>'}</span>`).join("");
+  $("costToggles").querySelectorAll(".ctoggle").forEach(t => t.onclick = () => {
+    const k = t.dataset.k; costOn.has(k) ? costOn.delete(k) : costOn.add(k); renderCostCenter(); });
+  const lines = COST_LINES.filter(l => costOn.has(l.key));
+  $("costChart").innerHTML = multiAreaSvg(series, lines);
+  const windowTotal = k => series.reduce((a, r) => a + (r[k] || 0), 0);
+  $("costTotals").innerHTML = lines.map(l =>
+    `<span><b style="color:${l.color}">${money(windowTotal(l.key))}</b>
+       <span class="hint">${esc(l.label)} · last 60d</span></span>`).join("")
+    + `<span><b>${money(lines.reduce((a,l) => a + windowTotal(l.key), 0))}</b>
+       <span class="hint">combined · last 60d</span></span>`;
 }
 
 function skillsForScope(scope) {
@@ -1178,7 +1313,7 @@ async function openDetail(id) {
   $("dTitle").textContent = `${job.company} — ${job.title}`;
   $("dBody").innerHTML = `
     <div class="row2" style="margin-bottom:10px; flex-wrap:wrap">
-      <span class="pill ${esc(job.category)}">${CATS[job.category] || esc(job.category)}</span>
+      ${jobCats(job).map(id => `<span class="pill cat">${esc(catLabel(id))}</span>`).join(" ")}
       ${job.watchlisted === 0 ? '<span class="pill newco">not on watchlist</span>' : ""}
       ${matchHtml(job)}
       <div class="spacer"></div>
@@ -1492,7 +1627,19 @@ async function uploadPdf() {
 /* ── add flow ───────────────────────────────────────────────────────────── */
 $("fPhase").innerHTML = PHASES.map(p => `<option value="${p}">${PHASE_LABEL[p]}</option>`).join("");
 $("bPhase").innerHTML = ["applied","found"].map(p => `<option value="${p}">${PHASE_LABEL[p]}</option>`).join("");
-$("fCategory").innerHTML = Object.entries(CATS).map(([k,v]) => `<option value="${k}">${v}</option>`).join("");
+// Manual-add category picker: leaves grouped by "Top › Mid" (built after taxonomy loads).
+function buildCatSelect() {
+  const groups = {}; // "Top › Mid" → [leafId]
+  for (const leaf of CAT_LEAVES) {
+    const mid = CAT_PARENT[leaf], top = mid ? CAT_PARENT[mid] : null;
+    const key = [top, mid].filter(Boolean).map(catLabel).join(" › ") || catLabel(leaf);
+    (groups[key] ??= []).push(leaf);
+  }
+  $("fCategory").innerHTML = Object.entries(groups).map(([g, leaves]) =>
+    `<optgroup label="${esc(g)}">` +
+    leaves.map(id => `<option value="${id}">${esc(catLabel(id))}</option>`).join("") +
+    `</optgroup>`).join("");
+}
 
 /* ── multi-select filters (pick several, or "all except") ─────────────────── */
 function multiFilter(mountId, allLabel, getOptions, sk, ek) {
@@ -1531,8 +1678,83 @@ function multiFilter(mountId, allLabel, getOptions, sk, ek) {
   document.addEventListener("click", (e) => { if (!mount.contains(e.target)) panel.hidden = true; });
   setLabel();
 }
-multiFilter("catMsel", "All categories", () => Object.entries(CATS), "cats", "catEx");
 multiFilter("termMsel", "All terms", () => state.terms_all.map(t => [t, t]), "terms", "termEx");
+
+/* ── category tri-state tree filter ───────────────────────────────────────── */
+// Node state derives from selected LEAVES: a parent is "on" when its whole
+// subtree is selected, "part" when some. Ticking a parent ticks its subtree;
+// unticking a child leaves siblings ticked and flips the parent to partial.
+const catNodeState = (id) => {                    // "on" | "part" | "off"
+  const leaves = catLeavesUnder(id);
+  const n = leaves.filter(l => state.catSel.has(l)).length;
+  return n === 0 ? "off" : n === leaves.length ? "on" : "part";
+};
+// Minimal query cover: highest fully-selected ancestors, else individual leaves.
+function catCover() {
+  const out = [];
+  const walk = (id) => {
+    const st = catNodeState(id);
+    if (st === "off") return;
+    if (st === "on") { out.push(id); return; }
+    (CAT_KIDS[id] || []).forEach(walk);
+  };
+  CAT_ROOTS.forEach(walk);
+  return out;
+}
+function catTreeFilter(mountId) {
+  const mount = $(mountId);
+  mount.innerHTML = `<button class="msel-btn" type="button"></button><div class="msel-panel" hidden></div>`;
+  const btn = mount.querySelector(".msel-btn"), panel = mount.querySelector(".msel-panel");
+  const open = new Set(CAT_ROOTS);                // expanded nodes
+  const check = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>`;
+  const setLabel = () => {
+    const cover = catCover();
+    let txt = "All categories";
+    if (cover.length) {
+      const names = cover.map(catLabel);
+      txt = (state.catEx ? "Except " : "") + (names.length <= 2 ? names.join(", ") : names[0] + " +" + (names.length - 1));
+    }
+    btn.innerHTML = `<span class="t">${esc(txt)}</span><span class="cx">▾</span>`;
+    btn.classList.toggle("active", cover.length > 0);
+  };
+  const commit = () => { state.cats = catCover(); setLabel(); load(); };
+  const rowHtml = (id) => {
+    const kids = CAT_KIDS[id] || [], st = catNodeState(id);
+    return `<div class="cnode" data-id="${id}">
+      <div class="crow">
+        <span class="ctog ${kids.length ? (open.has(id) ? "open" : "") : "leaf"}" data-tog="${id}">▶</span>
+        <span class="cbox ${st === "on" ? "on" : st === "part" ? "part" : ""}" data-box="${id}">${st === "on" ? check : ""}</span>
+        <span class="clabel">${esc(catLabel(id))}</span>
+      </div>
+      ${kids.length && open.has(id) ? `<div class="ckids">${kids.map(rowHtml).join("")}</div>` : ""}
+    </div>`;
+  };
+  const build = () => {
+    panel.innerHTML = `
+      <div class="msel-mode">
+        <span class="seg" data-ex="0">Include</span><span class="seg" data-ex="1">Exclude</span>
+      </div>
+      <div class="ctree">${CAT_ROOTS.map(rowHtml).join("")}</div>
+      <div class="msel-foot"><a class="out" data-clear>Clear</a></div>`;
+    const paintMode = () => panel.querySelectorAll(".seg").forEach(s => s.classList.toggle("on", (s.dataset.ex === "1") === state.catEx));
+    paintMode();
+    panel.querySelectorAll(".seg").forEach(s => s.onclick = () => { state.catEx = s.dataset.ex === "1"; paintMode(); commit(); });
+    panel.querySelectorAll("[data-tog]").forEach(t => t.onclick = (e) => {
+      e.stopPropagation(); const id = t.dataset.tog; if (!(CAT_KIDS[id] || []).length) return;
+      open.has(id) ? open.delete(id) : open.add(id); build(); });
+    panel.querySelectorAll("[data-box]").forEach(b => b.parentElement.onclick = () => {
+      const id = b.dataset.box, leaves = catLeavesUnder(id);
+      if (catNodeState(id) === "on") leaves.forEach(l => state.catSel.delete(l));
+      else leaves.forEach(l => state.catSel.add(l));
+      build(); commit(); });
+    panel.querySelector("[data-clear]").onclick = () => { state.catSel.clear(); state.catEx = false; build(); commit(); };
+  };
+  btn.onclick = (e) => { e.stopPropagation(); const willOpen = panel.hidden;
+    document.querySelectorAll(".msel-panel").forEach(p => p.hidden = true);
+    if (willOpen) { build(); panel.hidden = false; } };
+  document.addEventListener("click", (e) => { if (!mount.contains(e.target)) panel.hidden = true; });
+  setLabel();
+}
 
 function setAddMode(bulk) {
   $("modeSingle").classList.toggle("active", !bulk);
@@ -1554,7 +1776,8 @@ $("addBtn").onclick = () => {
 function fillForm(d) {
   $("fCompany").value = d.company || ""; $("fTitle").value = d.title || "";
   $("fLocation").value = d.location || ""; $("fUrl").value = d.url || $("aUrl").value.trim();
-  $("fCategory").value = CATS[d.category] ? d.category : "other";
+  { const leaf = jobCats(d).find(id => (CAT_KIDS[id]||[]).length === 0);
+    $("fCategory").value = leaf || (CATS[d.category] ? d.category : "oth_misc"); }
   $("fPhase").value = d.phase || "found";
   $("fImportance").value = d.importance || 3;
   $("fTerm").value = d.term || "";
@@ -1644,7 +1867,13 @@ $("search").oninput = (e) => {
 $("wlFilter").onchange = (e) => { state.watchlist = e.target.value; load(); };
 $("sortSel").onchange = (e) => { state.sort = e.target.value; load(); };
 
-load().catch(e => { $("empty").hidden = false; $("empty").textContent = "Failed to load: " + e.message; });
+// Boot: taxonomy first (drives the category select, tree filter, pills), then jobs.
+(async () => {
+  try { await loadTaxonomy(); } catch (e) { console.warn("taxonomy load failed", e); }
+  buildCatSelect();
+  catTreeFilter("catMsel");
+  await load();
+})().catch(e => { $("empty").hidden = false; $("empty").textContent = "Failed to load: " + e.message; });
 </script>
 </body>
 </html>

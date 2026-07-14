@@ -156,6 +156,23 @@ give cover letters your voice, edit the `cover_letter` instructions in
 vars `GITHUB_USERNAME` / `PORTFOLIO_URL` to pull your public repos / site into
 the document context.
 
+## 5. Categories & the cost center (optional)
+
+- **Category taxonomy.** Jobs are AI-tagged into a hierarchical tree
+  (`tracker/src/types.ts`, `TAXONOMY`) and roll up (a leaf belongs to its
+  parents). It ships security-heavy; edit `TAXONOMY` to add/rename branches for
+  your field — the model prompt, the filters, and the analytics all read from
+  that one array, so nothing else needs to change. After editing, re-tag jobs
+  with a rematch pass.
+- **Cost center.** Claude spend is charted automatically from the usage log. To
+  include flat cloud costs, set a single meta key (any API client with your
+  service token): `PUT /api/meta/cost_providers` with value
+  `{"cloudflare":{"monthly":5},"azure":{"monthly":0}}` — the dashboard spreads
+  each monthly figure across days and lets you toggle providers on the graph.
+- **Skills you have vs should learn** auto-fills from your synced profile — no
+  manual list needed, though you can still curate one via the meta key
+  `known_skills` (a JSON array).
+
 ## Notes
 
 - **Fail-open by design:** no API key → keyword-only results; tracker down → the

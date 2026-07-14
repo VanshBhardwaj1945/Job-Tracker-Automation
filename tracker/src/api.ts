@@ -3,7 +3,7 @@
 
 import { Hono } from "hono";
 import type { Env, GenKind } from "./types";
-import { ACTIVE_PHASES, CATEGORIES, PHASES, GEN_KINDS, DOC_KINDS, makeJobId, normalizeCategory } from "./types";
+import { ACTIVE_PHASES, CATEGORIES, PHASES, GEN_KINDS, DOC_KINDS, makeJobId, normalizeCategory, CAT_BY_ID, catPath, TAXONOMY, CATEGORY_LABELS } from "./types";
 import { fetchUrlText, parseJobText, parseJobList } from "./parse";
 import { getProfile, matchJobs, matchAndApply, clearProfileCache, applyMatches, enrichInputs, type MatchInput } from "./match";
 import { docChat, buildDocPrompt, type ChatMessage } from "./docgen";
@@ -94,6 +94,10 @@ const TIER_WHERE: Record<string, string> = {
 // legacy alias (digest uses recommended=1): rec-or-better
 const RECOMMENDED_WHERE = "phase = 'found' AND match_score >= 6";
 
+// Category taxonomy (tree + labels) — the UI builds its tri-state filter and
+// monochrome pills from this, so there's one source of truth (types.ts).
+api.get("/taxonomy", (c) => c.json({ nodes: TAXONOMY, labels: CATEGORY_LABELS }));
+
 // ── List / filter ────────────────────────────────────────────────────────────
 api.get("/jobs", async (c) => {
   const q = c.req.query();
@@ -111,15 +115,15 @@ api.get("/jobs", async (c) => {
       binds.push(...phases);
     }
   }
-  // category: comma-separated list; include (IN) by default, or exclude (NOT IN)
-  // when catmode=exclude — so you can pick several, or "all except 1-2".
+  // category: comma-separated node ids; rolls up through cat_path (a job tagged a
+  // leaf matches its ancestors too). Include by default, or "all except" with
+  // catmode=exclude. Any level works — filtering `swe` catches every SWE leaf.
   if (q.category) {
-    const cats = q.category.split(",").map((c) => c.trim())
-      .filter((c) => (CATEGORIES as readonly string[]).includes(c));
+    const cats = q.category.split(",").map((c) => c.trim()).filter((c) => CAT_BY_ID[c]);
     if (cats.length) {
-      const inClause = `category IN (${cats.map(() => "?").join(",")})`;
-      where.push(q.catmode === "exclude" ? `category NOT IN (${cats.map(() => "?").join(",")})` : inClause);
-      binds.push(...cats);
+      const ors = cats.map(() => "cat_path LIKE ?").join(" OR ");
+      where.push(q.catmode === "exclude" ? `NOT (${ors})` : `(${ors})`);
+      binds.push(...cats.map((c) => `% ${c} %`));
     }
   }
   if (q.company) {
@@ -220,14 +224,15 @@ api.post("/jobs", async (c) => {
   const skills = Array.isArray(b.skills) ? JSON.stringify(b.skills) : (b.skills ?? "[]");
   await c.env.DB
     .prepare(
-      `INSERT INTO jobs (id, company, title, location, url, source, category, ai_score, ai_reason,
+      `INSERT INTO jobs (id, company, title, location, url, source, category, categories, cat_path, ai_score, ai_reason,
                          match_score, match_reason, skills, term,
                          description, requirements, phase, importance, notes, created_at, updated_at, applied_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id, b.company, b.title, b.location ?? "", url, b.source ?? "manual",
       normalizeCategory(b.category),
+      JSON.stringify([normalizeCategory(b.category)]), catPath([normalizeCategory(b.category)]),
       b.ai_score ?? null, b.ai_reason ?? "",
       b.match_score ?? null, b.match_reason ?? "", skills, String(b.term ?? "").slice(0, 80),
       b.description ?? "", b.requirements ?? "",
@@ -255,9 +260,9 @@ api.post("/jobs/bulk", async (c) => {
   if (!Array.isArray(b.jobs)) return c.json({ error: "jobs array required" }, 400);
   const ts = now();
   const stmt = c.env.DB.prepare(
-    `INSERT INTO jobs (id, company, title, location, url, source, category, ai_score, ai_reason,
+    `INSERT INTO jobs (id, company, title, location, url, source, category, categories, cat_path, ai_score, ai_reason,
                        description, watchlisted, term, phase, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'found', ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'found', ?, ?)
      ON CONFLICT(id) DO UPDATE SET watchlisted = excluded.watchlisted,
        term = CASE WHEN excluded.term != '' THEN excluded.term ELSE jobs.term END`
   );
@@ -305,7 +310,8 @@ api.post("/jobs/bulk", async (c) => {
       await c.env.DB.batch(
         toUpsert.map((j) =>
           stmt.bind(j.id, j.company, j.title, j.location, j.url, "monitor",
-                    j.category, j.ai_score, j.ai_reason, j.description, j.watchlisted, j.term, ts, ts)
+                    j.category, JSON.stringify([j.category]), catPath([j.category]),
+                    j.ai_score, j.ai_reason, j.description, j.watchlisted, j.term, ts, ts)
         )
       );
     }
@@ -766,8 +772,8 @@ api.get("/stats", async (c) => {
                 FROM jobs GROUP BY company ORDER BY applied DESC, n DESC LIMIT 20`)
       .bind(...APPLIED_PLUS)
       .all<{ company: string; n: number; applied: number }>(),
-    db.prepare("SELECT skills, phase, category FROM jobs WHERE skills != '[]'")
-      .all<{ skills: string; phase: string; category: string }>(),
+    db.prepare("SELECT skills, phase, cat_path FROM jobs WHERE skills != '[]'")
+      .all<{ skills: string; phase: string; cat_path: string }>(),
     db.prepare(`SELECT COALESCE(match_score, -1) AS s, COUNT(*) AS n
                 FROM jobs GROUP BY s ORDER BY s`)
       .all<{ s: number; n: number }>(),
@@ -796,15 +802,20 @@ api.get("/stats", async (c) => {
   // the "what tools show up where" signal (and, vs your own skills, what to learn).
   const all = new Map<string, number>();
   const applied = new Map<string, number>();
+  // Skills roll up to EVERY node in a job's cat_path (leaf + all ancestors), so
+  // filtering the analytics tree at any level aggregates its whole subtree.
   const byCat: Record<string, Map<string, number>> = {};
   for (const row of skillRows.results) {
     let skills: string[] = [];
     try { skills = JSON.parse(row.skills); } catch { /* ignore bad rows */ }
-    const cat = row.category || "other";
-    (byCat[cat] ??= new Map());
+    const nodes = (row.cat_path || "").trim().split(/\s+/).filter(Boolean);
+    if (!nodes.length) nodes.push("oth_misc");
     for (const s of skills) {
       all.set(s, (all.get(s) ?? 0) + 1);
-      byCat[cat].set(s, (byCat[cat].get(s) ?? 0) + 1);
+      for (const cat of nodes) {
+        (byCat[cat] ??= new Map());
+        byCat[cat].set(s, (byCat[cat].get(s) ?? 0) + 1);
+      }
       if (APPLIED_PLUS.includes(row.phase)) applied.set(s, (applied.get(s) ?? 0) + 1);
     }
   }
@@ -814,12 +825,23 @@ api.get("/stats", async (c) => {
   const by_category: Record<string, { skill: string; count: number }[]> = {};
   for (const [cat, m] of Object.entries(byCat)) by_category[cat] = top(m, 30);
 
-  // The candidate's own skills (meta known_skills, JSON array) → drives the
-  // "tools you have vs are missing" view. Empty is fine (everything shows as "missing").
+  // The candidate's own skills: the manually-curated meta list UNION anything the
+  // AI already saw in the synced profile (auto-learn — as the résumé grows, newly
+  // acquired tools get counted as "have" without editing the list by hand).
   const ksRow = await db.prepare("SELECT value FROM meta WHERE key = 'known_skills'")
     .first<{ value: string }>();
   let known_skills: string[] = [];
   try { known_skills = JSON.parse(ksRow?.value || "[]"); } catch { /* ignore */ }
+  const profileText = (await getProfile(db))?.toLowerCase() ?? "";
+  if (profileText) {
+    const have = new Set(known_skills.map((s) => s.toLowerCase()));
+    for (const skill of all.keys()) {
+      const k = skill.toLowerCase();
+      if (have.has(k)) continue;
+      const re = new RegExp(`(^|[^a-z0-9+#.])${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9+#.]|$)`);
+      if (re.test(profileText)) { known_skills.push(skill); have.add(k); }
+    }
+  }
 
   // ── Claude token usage / spend / cache effectiveness ──
   type URow = {
@@ -856,15 +878,72 @@ api.get("/stats", async (c) => {
   }).sort((a, b) => b.cost - a.cost);
   // Of the cacheable prefix tokens, how many were served from cache?
   const cacheable = t.cache_read + t.cache_write;
+
+  // ── Cost analytics center: spend-over-time, per provider ──
+  // Claude spend is real (usage_log, priced per model). Cloud providers are flat
+  // monthly figures you set once in meta `cost_providers`
+  // (JSON: {"cloudflare":{"monthly":5},"azure":{"monthly":0}}) — spread evenly
+  // across days so the stacked graph shows a realistic blended run-rate.
+  const dailyRows = await db
+    .prepare(
+      `SELECT substr(ts,1,10) AS day, model,
+              SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens,
+              SUM(cache_write_tokens) AS cache_write_tokens, SUM(cache_read_tokens) AS cache_read_tokens
+       FROM usage_log WHERE ts >= ? GROUP BY day, model ORDER BY day`
+    )
+    .bind(new Date(Date.now() - 60 * 864e5).toISOString())
+    .all<URow & { day: string }>();
+  const claudeByDay: Record<string, number> = {};
+  for (const r of dailyRows.results) claudeByDay[r.day] = (claudeByDay[r.day] ?? 0) + rowCost(r);
+
+  let providers: Record<string, { monthly?: number }> = {};
+  const provRow = await db.prepare("SELECT value FROM meta WHERE key = 'cost_providers'")
+    .first<{ value: string }>();
+  try { providers = JSON.parse(provRow?.value || "{}"); } catch { /* ignore */ }
+
+  const spend_daily: { day: string; claude: number; cloudflare: number; azure: number }[] = [];
+  for (let i = 59; i >= 0; i--) {
+    const day = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10);
+    spend_daily.push({
+      day,
+      claude: +(claudeByDay[day] ?? 0).toFixed(4),
+      cloudflare: +(((providers.cloudflare?.monthly ?? 0) / 30)).toFixed(4),
+      azure: +(((providers.azure?.monthly ?? 0) / 30)).toFixed(4),
+    });
+  }
+
   const usage = {
     totals: { ...t, cache_hit_rate: cacheable ? t.cache_read / cacheable : null },
     by_endpoint: byEndpoint,
     cost_30d: cost30.results.reduce((s, r) => s + rowCost(r), 0),
+    spend_daily,
+    providers: {
+      claude: { total: t.cost, cost_30d: cost30.results.reduce((s, r) => s + rowCost(r), 0) },
+      cloudflare: { monthly: providers.cloudflare?.monthly ?? 0 },
+      azure: { monthly: providers.azure?.monthly ?? 0 },
+    },
   };
+
+  // Per-node category counts (rolled up through cat_path) — total + applied — so
+  // the analytics tree can label every level with its whole subtree's totals.
+  const catRows = await db.prepare("SELECT cat_path, phase FROM jobs")
+    .all<{ cat_path: string; phase: string }>();
+  const catCount: Record<string, { n: number; applied: number }> = {};
+  for (const row of catRows.results) {
+    const nodes = (row.cat_path || "").trim().split(/\s+/).filter(Boolean);
+    if (!nodes.length) nodes.push("oth_misc");
+    const isApplied = APPLIED_PLUS.includes(row.phase);
+    for (const cat of nodes) {
+      (catCount[cat] ??= { n: 0, applied: 0 });
+      catCount[cat].n++;
+      if (isApplied) catCount[cat].applied++;
+    }
+  }
 
   return c.json({
     phases: Object.fromEntries(phases.results.map((r) => [r.phase, r.n])),
     categories: categories.results,
+    cat_counts: catCount, // rolled-up per-node totals for the analytics tree
     weekly: weekly.results.reverse(),
     monthly: monthly.results.reverse(),
     companies: companies.results,

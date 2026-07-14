@@ -14,11 +14,11 @@
 
 The dashboard (dark, Linear-inspired, installable as a PWA). Job/company data is blurred for privacy.
 
-**Tracker** — every found role, AI-matched and triaged into apply-now tiers:
+**Tracker** — every found role, AI-matched, tagged into a **multi-level category taxonomy** (a job can live in several categories at once), and triaged into apply-now tiers. Filter with a **tri-state category tree** — tick a parent to select its whole subtree, untick one child and the rest stay:
 
 <img src="docs/screenshots/dashboard-tracker.png" width="900" alt="Tracker">
 
-**Analytics** — pipeline funnel, category mix, and a **tools & buzzwords** view you can scope by *all jobs / applied / any category*, split into what you **already have vs should learn** (missing) against your own skill list — plus live Claude token spend and prompt-cache hit rate:
+**Analytics** — pipeline funnel, category mix, and a **tools & buzzwords** view you can scope through a **hierarchical category tree** (*all jobs / applied / any level of the taxonomy*), split into what you **already have vs should learn** (missing) against your own skill list — which **auto-updates** from your synced profile. Plus a **cost center**: spend-over-time you can toggle by provider (Claude / Cloudflare / Azure or any mix) to spot spikes, alongside live token usage and prompt-cache hit rate:
 
 <img src="docs/screenshots/dashboard-analytics.png" width="900" alt="Analytics">
 
@@ -37,6 +37,7 @@ A production-shaped, serverless, AI-driven system — not a tutorial. Every piec
 - **Infrastructure as Code**: the entire cloud footprint (Worker, D1, R2, DNS, Access policies, service tokens) is defined in **Terraform** — reproducible, reviewable, one `apply`.
 - **Event-driven automation**: scheduled **GitHub Actions** workflows scrape job boards, watch email over IMAP, and sync data through the API with least-privilege **service tokens**.
 - **Applied LLM engineering**: profile-aware job matching, structured extraction, and per-job document generation using Claude — with **prompt caching**, a **daily spend guardrail**, and the **Message Batches API** to keep cost low.
+- **Hierarchical data modeling**: a parent→mid→leaf **category taxonomy** where the AI tags the deepest leaves and everything **rolls up** — one SQL-`LIKE` ancestor-closure column powers tree filters and analytics at any level, so a job in *SRE* also counts under *Infra/Platform* and *SWE*.
 
 ## Stack
 
