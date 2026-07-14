@@ -12,6 +12,24 @@ This document explains what the system is, how it's built, and — more usefully
 job-hunt platform with **no servers to babysit**, **low AI cost**, and a
 security posture I'd be comfortable putting my name on.
 
+## A note on how I actually use this (for recruiters reading)
+
+I built this to **support** my search, not to outsource it — the effort and the
+judgment stay mine:
+
+- I keep a list of the **specific companies and roles I genuinely want**, so the
+  system surfaces those the moment they post and I don't miss a deadline — while
+  *also* casting a wider net so I catch strong roles I hadn't thought to look for.
+- Every AI match score is a **starting point for triage, not a decision**. I still
+  **research the company and role myself** before I apply.
+- The generated resume and cover letter are a **baseline**. I review and edit every
+  one by hand, make sure it's accurate and sounds like me, and tailor it further with
+  my own research. **Nothing goes out that I haven't personally checked and made my own.**
+
+The engineering here is in the automation, the infrastructure, and the security —
+it removes the busywork (finding, tracking, first drafts) so I can spend my time on
+the parts that actually matter: researching, tailoring, and applying thoughtfully.
+
 ---
 
 ## 1. Motivation
