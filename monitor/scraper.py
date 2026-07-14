@@ -212,6 +212,27 @@ def run(dry_run=False):
                 n += 1
         log.info(f"  Simplify feed: {n} match(es)")
 
+    # 3b. Additional open job APIs (The Muse, Remotive, USAJOBS, Adzuna — keyed
+    #     ones self-skip without env), plus any optional private feeds from an
+    #     `extra_sources.py` module (not shipped in the open-source template).
+    try:
+        import extra_sources
+        _private_feeds = tuple(extra_sources.FEEDS)
+    except Exception:
+        _private_feeds = ()
+    for src_name, fn in tuple(sources.EXTRA_FEEDS) + _private_feeds:
+        feed = fn()
+        if not feed:
+            continue
+        n = 0
+        for raw in feed:
+            cat = matcher.match(raw["title"], raw["location"], raw.get("description", ""))
+            if cat:
+                all_found.append(build_job(raw.get("company", "?"), raw, src_name, cat))
+                n += 1
+        if n:
+            log.info(f"  {src_name}: {n} match(es)")
+
     # ── Dedupe ────────────────────────────────────────────────────────────────
     seen_ids = {j["id"] for j in seen_data.get("jobs", [])}
     is_baseline = not seen_ids

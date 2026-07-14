@@ -15,6 +15,7 @@ so the caller can track consecutive failures per company.
 """
 
 import logging
+import os
 import re
 import time
 
@@ -348,6 +349,132 @@ def scrape_simplify(seasons=("2027", "2026")):
         except Exception as e:
             log.warning(f"simplify Summer{season}: {e}")
     return None
+
+
+# ── Extra open job APIs (aggregators / boards beyond ATS + Simplify) ─────────
+# All fail-soft. The keyed ones no-op cleanly when their env vars are absent.
+
+def scrape_themuse(pages: int = 3):
+    """The Muse public API — internship-level roles at known companies. No key."""
+    jobs = []
+    try:
+        for page in range(pages):
+            r = SESSION.get("https://www.themuse.com/api/public/jobs",
+                            params={"level": "Internship", "page": page, "descending": "true"},
+                            timeout=20)
+            if r.status_code != 200:
+                break
+            results = r.json().get("results", [])
+            if not results:
+                break
+            for j in results:
+                locs = "; ".join(l.get("name", "") for l in (j.get("locations") or [])[:3])
+                jobs.append({
+                    "title": j.get("name", ""),
+                    "location": locs or "Unknown",
+                    "url": (j.get("refs") or {}).get("landing_page", ""),
+                    "description": re.sub(r"<[^>]+>", " ", j.get("contents") or "")[:2000],
+                    "company": (j.get("company") or {}).get("name", ""),
+                })
+        log.info(f"themuse: {len(jobs)} internship listing(s)")
+        return jobs
+    except Exception as e:
+        log.warning(f"themuse: {e}")
+        return None
+
+
+def scrape_remotive():
+    """Remotive — remote software/security roles (some internships). No key."""
+    try:
+        r = SESSION.get("https://remotive.com/api/remote-jobs",
+                        params={"category": "software-dev", "limit": 100}, timeout=20)
+        if r.status_code != 200:
+            return None
+        jobs = []
+        for j in r.json().get("jobs", []):
+            jobs.append({
+                "title": j.get("title", ""),
+                "location": j.get("candidate_required_location", "Remote") or "Remote",
+                "url": j.get("url", ""),
+                "description": re.sub(r"<[^>]+>", " ", j.get("description") or "")[:2000],
+                "company": j.get("company_name", ""),
+            })
+        log.info(f"remotive: {len(jobs)} remote role(s)")
+        return jobs
+    except Exception as e:
+        log.warning(f"remotive: {e}")
+        return None
+
+
+def scrape_usajobs(keywords=("cybersecurity", "security engineer", "software")):
+    """USAJOBS — federal internships / student roles. Free key:
+    set USAJOBS_API_KEY + USAJOBS_EMAIL (https://developer.usajobs.gov/apirequest/)."""
+    key, email = os.environ.get("USAJOBS_API_KEY"), os.environ.get("USAJOBS_EMAIL")
+    if not (key and email):
+        return None
+    jobs = []
+    try:
+        for kw in keywords:
+            r = SESSION.get(
+                "https://data.usajobs.gov/api/search",
+                headers={"Host": "data.usajobs.gov", "User-Agent": email, "Authorization-Key": key},
+                params={"Keyword": kw, "HiringPath": "student", "ResultsPerPage": 50}, timeout=25)
+            if r.status_code != 200:
+                continue
+            for it in r.json().get("SearchResult", {}).get("SearchResultItems", []):
+                d = it.get("MatchedObjectDescriptor", {})
+                details = (d.get("UserArea", {}).get("Details", {}) or {})
+                jobs.append({
+                    "title": d.get("PositionTitle", ""),
+                    "location": d.get("PositionLocationDisplay", "United States") or "United States",
+                    "url": d.get("PositionURI", ""),
+                    "description": (details.get("JobSummary") or d.get("QualificationSummary") or "")[:2000],
+                    "company": d.get("OrganizationName") or d.get("DepartmentName") or "US Government",
+                })
+        log.info(f"usajobs: {len(jobs)} federal listing(s)")
+        return jobs
+    except Exception as e:
+        log.warning(f"usajobs: {e}")
+        return None
+
+
+def scrape_adzuna(pages: int = 2, what: str = "intern"):
+    """Adzuna aggregator — broad US coverage (closest open thing to Indeed). Free key:
+    set ADZUNA_APP_ID + ADZUNA_APP_KEY (https://developer.adzuna.com/)."""
+    aid, akey = os.environ.get("ADZUNA_APP_ID"), os.environ.get("ADZUNA_APP_KEY")
+    if not (aid and akey):
+        return None
+    jobs = []
+    try:
+        for page in range(1, pages + 1):
+            r = SESSION.get(
+                f"https://api.adzuna.com/v1/api/jobs/us/search/{page}",
+                params={"app_id": aid, "app_key": akey, "what": what,
+                        "results_per_page": 50, "content-type": "application/json"}, timeout=25)
+            if r.status_code != 200:
+                break
+            for j in r.json().get("results", []):
+                jobs.append({
+                    "title": j.get("title", ""),
+                    "location": (j.get("location") or {}).get("display_name", "US"),
+                    "url": j.get("redirect_url", ""),
+                    "description": (j.get("description") or "")[:2000],
+                    "company": (j.get("company") or {}).get("display_name", ""),
+                })
+        log.info(f"adzuna: {len(jobs)} listing(s)")
+        return jobs
+    except Exception as e:
+        log.warning(f"adzuna: {e}")
+        return None
+
+
+# All extra feeds, in call order (keyed ones self-skip without env).
+EXTRA_FEEDS = (
+    ("themuse", scrape_themuse),
+    ("remotive", scrape_remotive),
+    ("usajobs", scrape_usajobs),
+    ("adzuna", scrape_adzuna),
+)
 
 
 # ── Registry router ───────────────────────────────────────────────────────────
