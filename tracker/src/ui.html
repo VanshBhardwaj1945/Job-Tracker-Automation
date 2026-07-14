@@ -134,6 +134,31 @@
     outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
   }
   select option { background: var(--surface2); }
+  /* multi-select filter (categories / terms) */
+  .msel { position: relative; }
+  .msel-btn { display: inline-flex; align-items: center; gap: 8px; max-width: 220px;
+    background: var(--surface); border: 1px solid var(--stroke); color: var(--text);
+    border-radius: var(--radius-sm); padding: 6px 10px; font: inherit; font-size: 12.5px; cursor: pointer;
+    transition: border-color .12s var(--ease); }
+  .msel-btn:hover { border-color: var(--stroke2); }
+  .msel-btn.active { border-color: var(--accent); color: var(--text); }
+  .msel-btn .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .msel-btn .cx { color: var(--muted); font-size: 10px; margin-left: auto; }
+  .msel-panel { position: absolute; top: calc(100% + 5px); left: 0; z-index: 40; min-width: 210px;
+    background: var(--surface2); border: 1px solid var(--stroke2); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); padding: 6px; animation: dlgIn .14s var(--ease); }
+  .msel-mode { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--stroke);
+    border-radius: var(--radius-sm); padding: 2px; margin-bottom: 6px; }
+  .msel-mode .seg { flex: 1; text-align: center; font-size: 11.5px; padding: 4px 6px; border-radius: 4px;
+    color: var(--muted); cursor: pointer; user-select: none; }
+  .msel-mode .seg.on { background: var(--surface3); color: var(--text); }
+  .msel-opts { max-height: 260px; overflow-y: auto; }
+  .msel-opt { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 5px;
+    font-size: 12.5px; cursor: pointer; }
+  .msel-opt:hover { background: var(--surface3); }
+  .msel-opt input { width: 14px; height: 14px; accent-color: var(--accent); margin: 0; }
+  .msel-foot { border-top: 1px solid var(--stroke); margin-top: 4px; padding: 6px 8px 2px; }
+  .msel-foot .out { font-size: 11.5px; cursor: pointer; }
   /* inline line icons + status dots */
   svg.i { width: 15px; height: 15px; flex: none; vertical-align: -3px; }
   button svg.i { margin-right: 5px; }
@@ -440,8 +465,8 @@
       <div class="tabs glass" id="tabs"></div>
       <div class="filters">
         <input id="search" type="search" placeholder="Search company / title…">
-        <select id="catFilter"><option value="">All categories</option></select>
-        <select id="termFilter"><option value="">All terms</option></select>
+        <div class="msel" id="catMsel"></div>
+        <div class="msel" id="termMsel"></div>
   <select id="wlFilter">
     <option value="">All companies</option>
     <option value="1">My watchlist</option>
@@ -677,7 +702,8 @@ const skelRows = (n = 6) => Array.from({ length: n }, () =>
 const skelCards = (n = 6) =>
   '<div class="kpis">' + Array.from({ length: 5 }, () => '<div class="skel" style="height:82px"></div>').join("") + '</div>' +
   '<div class="grid">' + Array.from({ length: n }, () => '<div class="skel skel-card"></div>').join("") + '</div>';
-const state = { page:"tracker", tab:"top", q:"", category:"", sort:"rank", watchlist:"", term:"",
+const state = { page:"tracker", tab:"top", q:"", sort:"rank", watchlist:"",
+                cats:[], catEx:false, terms:[], termEx:false, terms_all:[],
                 counts:{}, recommended:0, jobs:[] };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
@@ -756,18 +782,14 @@ async function load() {
   if (tab.tier) p.set("tier", tab.tier);
   else if (tab.phases) p.set("phase", tab.phases);
   if (state.q) p.set("q", state.q);
-  if (state.category) p.set("category", state.category);
+  if (state.cats.length) { p.set("category", state.cats.join(",")); if (state.catEx) p.set("catmode", "exclude"); }
   if (state.watchlist !== "") p.set("watchlist", state.watchlist);
-  if (state.term) p.set("term", state.term);
+  if (state.terms.length) { p.set("term", state.terms.join(",")); if (state.termEx) p.set("termmode", "exclude"); }
   p.set("sort", state.sort);
   if (!state.jobs.length) $("rows").innerHTML = skelRows();
   const data = await apiCall("/jobs?" + p);
   state.jobs = data.jobs; state.counts = data.counts; state.tiers = data.tiers || {};
-  const tf = $("termFilter");
-  if (data.terms && tf.options.length - 1 !== data.terms.length) {
-    tf.innerHTML = '<option value="">All terms</option>' +
-      data.terms.map(t => `<option value="${esc(t)}" ${t===state.term?"selected":""}>${esc(t)}</option>`).join("");
-  }
+  if (data.terms) state.terms_all = data.terms;
   renderTabs(); renderRows();
 }
 
@@ -1399,8 +1421,46 @@ async function uploadPdf() {
 $("fPhase").innerHTML = PHASES.map(p => `<option value="${p}">${PHASE_LABEL[p]}</option>`).join("");
 $("bPhase").innerHTML = ["applied","found"].map(p => `<option value="${p}">${PHASE_LABEL[p]}</option>`).join("");
 $("fCategory").innerHTML = Object.entries(CATS).map(([k,v]) => `<option value="${k}">${v}</option>`).join("");
-$("catFilter").innerHTML = '<option value="">All categories</option>' +
-  Object.entries(CATS).map(([k,v]) => `<option value="${k}">${v}</option>`).join("");
+
+/* ── multi-select filters (pick several, or "all except") ─────────────────── */
+function multiFilter(mountId, allLabel, getOptions, sk, ek) {
+  const mount = $(mountId);
+  mount.innerHTML = `<button class="msel-btn" type="button"></button><div class="msel-panel" hidden></div>`;
+  const btn = mount.querySelector(".msel-btn"), panel = mount.querySelector(".msel-panel");
+  const setLabel = () => {
+    const sel = state[sk]; let txt = allLabel;
+    if (sel.length) {
+      const names = sel.map(v => (getOptions().find(o => o[0] === v) || [0, v])[1]);
+      txt = (state[ek] ? "Except " : "") + (names.length <= 2 ? names.join(", ") : names[0] + " +" + (names.length - 1));
+    }
+    btn.innerHTML = `<span class="t">${esc(txt)}</span><span class="cx">▾</span>`;
+    btn.classList.toggle("active", sel.length > 0);
+  };
+  const build = () => {
+    const opts = getOptions();
+    panel.innerHTML = `
+      <div class="msel-mode">
+        <span class="seg" data-ex="0">Include</span><span class="seg" data-ex="1">Exclude</span>
+      </div>
+      <div class="msel-opts">${opts.length ? opts.map(([v,l]) =>
+        `<label class="msel-opt"><input type="checkbox" value="${esc(v)}"><span>${esc(l)}</span></label>`).join("")
+        : '<div class="hint" style="padding:8px 10px">nothing to filter yet</div>'}</div>
+      <div class="msel-foot"><a class="out" data-clear>Clear</a></div>`;
+    const paint = () => panel.querySelectorAll(".seg").forEach(s => s.classList.toggle("on", (s.dataset.ex === "1") === state[ek]));
+    paint();
+    panel.querySelectorAll(".seg").forEach(s => s.onclick = () => { state[ek] = s.dataset.ex === "1"; paint(); setLabel(); load(); });
+    panel.querySelectorAll("input").forEach(cb => { cb.checked = state[sk].includes(cb.value);
+      cb.onchange = () => { state[sk] = cb.checked ? [...new Set([...state[sk], cb.value])] : state[sk].filter(x => x !== cb.value); setLabel(); load(); }; });
+    panel.querySelector("[data-clear]").onclick = () => { state[sk] = []; state[ek] = false; build(); setLabel(); load(); };
+  };
+  btn.onclick = (e) => { e.stopPropagation(); const willOpen = panel.hidden;
+    document.querySelectorAll(".msel-panel").forEach(p => p.hidden = true);
+    if (willOpen) { build(); panel.hidden = false; } };
+  document.addEventListener("click", (e) => { if (!mount.contains(e.target)) panel.hidden = true; });
+  setLabel();
+}
+multiFilter("catMsel", "All categories", () => Object.entries(CATS), "cats", "catEx");
+multiFilter("termMsel", "All terms", () => state.terms_all.map(t => [t, t]), "terms", "termEx");
 
 function setAddMode(bulk) {
   $("modeSingle").classList.toggle("active", !bulk);
@@ -1509,9 +1569,7 @@ $("search").oninput = (e) => {
   clearTimeout(debounce);
   debounce = setTimeout(() => { state.q = e.target.value.trim(); load(); }, 250);
 };
-$("catFilter").onchange = (e) => { state.category = e.target.value; load(); };
 $("wlFilter").onchange = (e) => { state.watchlist = e.target.value; load(); };
-$("termFilter").onchange = (e) => { state.term = e.target.value; load(); };
 $("sortSel").onchange = (e) => { state.sort = e.target.value; load(); };
 
 load().catch(e => { $("empty").hidden = false; $("empty").textContent = "Failed to load: " + e.message; });

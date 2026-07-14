@@ -111,9 +111,16 @@ api.get("/jobs", async (c) => {
       binds.push(...phases);
     }
   }
-  if (q.category && (CATEGORIES as readonly string[]).includes(q.category)) {
-    where.push("category = ?");
-    binds.push(q.category);
+  // category: comma-separated list; include (IN) by default, or exclude (NOT IN)
+  // when catmode=exclude — so you can pick several, or "all except 1-2".
+  if (q.category) {
+    const cats = q.category.split(",").map((c) => c.trim())
+      .filter((c) => (CATEGORIES as readonly string[]).includes(c));
+    if (cats.length) {
+      const inClause = `category IN (${cats.map(() => "?").join(",")})`;
+      where.push(q.catmode === "exclude" ? `category NOT IN (${cats.map(() => "?").join(",")})` : inClause);
+      binds.push(...cats);
+    }
   }
   if (q.company) {
     where.push("company LIKE ? COLLATE NOCASE");
@@ -123,9 +130,15 @@ api.get("/jobs", async (c) => {
     where.push("(company LIKE ? COLLATE NOCASE OR title LIKE ? COLLATE NOCASE OR location LIKE ? COLLATE NOCASE)");
     binds.push(`%${q.q}%`, `%${q.q}%`, `%${q.q}%`);
   }
+  // term: comma-separated list; a job's term is a joined string ("Summer 2027, …")
+  // so match with LIKE. Include (matches any) or exclude (matches none).
   if (q.term) {
-    where.push("term LIKE ?");
-    binds.push(`%${q.term}%`);
+    const terms = q.term.split(",").map((t) => t.trim()).filter(Boolean);
+    if (terms.length) {
+      const ors = terms.map(() => "term LIKE ?").join(" OR ");
+      where.push(q.termmode === "exclude" ? `NOT (${ors})` : `(${ors})`);
+      binds.push(...terms.map((t) => `%${t}%`));
+    }
   }
   if (q.watchlist === "1" || q.watchlist === "0") {
     where.push("watchlisted = ?");
