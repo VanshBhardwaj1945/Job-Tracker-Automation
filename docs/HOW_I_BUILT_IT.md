@@ -12,7 +12,7 @@ This document explains what the system is, how it's built, and — more usefully
 job-hunt platform with **no servers to babysit**, **low AI cost**, and a
 security posture I'd be comfortable putting my name on.
 
-## A note on how I actually use this (for recruiters reading)
+## My workflow, for integrity
 
 I built this to **support** my search, not to outsource it — the effort and the
 judgment stay mine:
