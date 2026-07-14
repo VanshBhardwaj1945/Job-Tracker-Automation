@@ -1309,8 +1309,12 @@ function showDocLanding() {
         <button id="rGenPro">Use my Claude (free)</button>
       </div>
       <p class="hint" style="font-size:11px; margin-top:10px">
-        <b>Generate</b> runs Opus on the API. <b>Use my Claude</b> copies the full prompt to paste into
-        claude.ai on your Pro plan ($0). You can also upload a file you already have from the job's Documents section.
+        <b>Generate</b> runs the model on the API. <b>Use my AI</b> copies the full prompt to run on your
+        own AI plan ($0). You can also upload a file you already have from the job's Documents section.
+      </p>
+      <p class="hint" style="font-size:11px; margin-top:8px; color:var(--amber)">
+        ⚠ A draft, not a final. Always review and edit before sending, make sure every claim is true
+        and sounds like you, and do your own research on the company.
       </p>
     </div>`;
   $("rGen").onclick = () => { $("rInputRow").style.display = ""; sendDocTurn(null); };

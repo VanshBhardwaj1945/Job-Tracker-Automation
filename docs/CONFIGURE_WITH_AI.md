@@ -31,6 +31,8 @@ hand — see [`SETUP.md`](SETUP.md).)
 
 - **Never invent the user's experience.** Documents come from their real
   `resume.md` + profile. If something's missing, ask.
+- **Remind the user of responsible use:** AI drafts are a starting point — they should
+  always review/edit resumes + cover letters, verify authenticity, and research each company themselves.
 - Secrets live in `.env` / `terraform.tfvars` / CI secrets — all gitignored.
   Never commit or print them.
 - Prefer the smallest footprint the user wants; local/Docker are first-class.

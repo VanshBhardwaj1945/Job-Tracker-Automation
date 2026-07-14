@@ -130,4 +130,25 @@ file — see [`docs/CONFIGURE_WITH_AI.md`](docs/CONFIGURE_WITH_AI.md). Or by han
 
 ---
 
+## Disclaimer — use it to *assist*, not to replace your effort
+
+This tool is here to **aid** your job hunt — surfacing roles fast and giving you a
+strong first draft — **not to do the work for you**. A real, thoughtful application
+always wins.
+
+- **Always review and edit AI-written resumes and cover letters before you send them.**
+  Treat every draft as a starting point, never a final submission.
+- **Verify everything is accurate and authentic.** The AI works only from your real
+  materials and is instructed never to invent — but you are responsible for making sure
+  every claim is true and genuinely sounds like *you*.
+- **Do your own research on the company and role.** Personal, specific interest is what
+  gets interviews. Use the generated interview-prep as a jumping-off point, then go deeper
+  yourself. (Speaking from experience — this is what actually works.)
+- **AI match scores are triage, not gospel** — they help you prioritize where to spend
+  your time, not decide for you.
+- You are responsible for everything you submit. Provided as-is under the MIT license,
+  with no warranty.
+
+---
+
 Built with [Claude Code](https://claude.com/claude-code). MIT licensed — fork it, make it yours.

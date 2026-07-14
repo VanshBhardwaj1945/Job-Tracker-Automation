@@ -7,6 +7,11 @@ for me"* — see [`CONFIGURE_WITH_AI.md`](CONFIGURE_WITH_AI.md). Or do it by han
 
 For the *why* behind any of this, see **[How I Built It](HOW_I_BUILT_IT.md)**.
 
+> **Use it to assist, not replace your effort.** Always review and edit AI-written
+> resumes/cover letters before sending, verify every claim is true and authentic, and do
+> your own research on each company — a genuine, personalized application still wins. See
+> the Disclaimer in the [README](../README.md).
+
 **Who this is for:** students and job-seekers who want the finding + tailoring +
 tracking automated, at any budget — from "just run the finder on my laptop for
 free" to "a fully hosted dashboard I open from my phone."
