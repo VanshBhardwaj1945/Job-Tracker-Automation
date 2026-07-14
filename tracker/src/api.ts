@@ -1106,7 +1106,51 @@ api.get("/activity", async (c) => {
     runsError = "GITHUB_REPO not configured";
   }
 
-  return c.json({ heartbeats, runs, runs_error: runsError, events: events.results });
+  return c.json({
+    heartbeats, runs, runs_error: runsError, events: events.results,
+    can_dispatch: !!c.env.GITHUB_TOKEN, // UI shows Run-now buttons only if a token is set
+  });
+});
+
+// Allowlist: logical action → (workflow file, inputs). The worker only ever
+// dispatches one of these — the UI can't ask it to run an arbitrary workflow.
+const DISPATCHABLE: Record<string, { workflow: string; inputs?: Record<string, string>; label: string }> = {
+  monitor: { workflow: "job_monitor.yml", inputs: { mode: "normal" }, label: "Job monitor" },
+  push:    { workflow: "job_monitor.yml", inputs: { mode: "sync-tracker" }, label: "Monitor → tracker push" },
+  gmail:   { workflow: "job_monitor.yml", inputs: { mode: "gmail" }, label: "Gmail watcher" },
+  profile: { workflow: "profile_sync.yml", label: "Profile sync" },
+};
+
+// ── Trigger a workflow from the UI (workflow_dispatch) ───────────────────────
+api.post("/activity/dispatch", async (c) => {
+  const { action } = await c.req.json<{ action?: string }>().catch(() => ({ action: undefined }));
+  const spec = action ? DISPATCHABLE[action] : undefined;
+  if (!spec) return c.json({ error: "unknown action" }, 400);
+  if (!c.env.GITHUB_REPO) return c.json({ error: "GITHUB_REPO not configured" }, 503);
+  if (!c.env.GITHUB_TOKEN)
+    return c.json({ error: "No GitHub token set — add a fine-grained PAT (Actions: Read and write) as the github_token terraform var to enable one-click runs." }, 503);
+
+  const res = await fetch(
+    `https://api.github.com/repos/${c.env.GITHUB_REPO}/actions/workflows/${spec.workflow}/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        "User-Agent": "job-tracker-worker",
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${c.env.GITHUB_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ref: "main", ...(spec.inputs ? { inputs: spec.inputs } : {}) }),
+    }
+  );
+  if (res.status === 204) {
+    return c.json({ ok: true, action, workflow: spec.workflow, label: spec.label, dispatched_at: new Date().toISOString() });
+  }
+  const msg = await res.text().catch(() => "");
+  const hint = res.status === 403
+    ? " — the PAT is missing the Actions: Read and write permission (it currently has read only)."
+    : "";
+  return c.json({ error: `GitHub API ${res.status}${hint}`, detail: msg.slice(0, 300) }, 502);
 });
 
 async function logEvent(db: D1Database, jobId: string, type: string, detail = "", subject = "") {

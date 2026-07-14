@@ -284,6 +284,25 @@
   .hb b { display: block; font-size: 13px; }
   .hb .when { color: var(--muted); font-size: 12px; }
   .hb .meta2 { color: var(--dim); font-size: 11px; margin-top: 1px; }
+  .hb.clickable { cursor: pointer; }
+  .hb .chev { margin-left: auto; color: var(--dim); flex: none; transition: transform .14s var(--ease); }
+  .hb.open .chev { transform: rotate(90deg); }
+  .hb.open { border-color: var(--accent); }
+  /* action detail panel (explain + run + progress) */
+  .actpanel { margin: -4px 0 14px; overflow: hidden; }
+  .actpanel .inner { padding: 15px 17px; }
+  .actpanel h4 { margin: 0 0 6px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  .actpanel p { color: var(--muted); font-size: 12.5px; line-height: 1.55; margin: 0 0 12px; }
+  .actpanel .runbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .actpanel .rstatus { font-size: 12px; color: var(--muted); }
+  .prog { flex: 1; min-width: 160px; height: 7px; border-radius: 4px; background: var(--surface);
+          border: 1px solid var(--stroke); overflow: hidden; position: relative; }
+  .prog .fill { position: absolute; inset: 0; border-radius: 4px; transition: width .4s var(--ease), background .3s; }
+  .prog.run .fill { width: 40%; background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    background-size: 200% 100%; animation: progslide 1.1s linear infinite; }
+  .prog.done .fill { width: 100%; background: var(--green); }
+  .prog.fail .fill { width: 100%; background: var(--red); }
+  @keyframes progslide { 0% { transform: translateX(-60%);} 100% { transform: translateX(160%);} }
   .runrow { display: flex; align-items: center; gap: 12px; padding: 10px 6px;
             border-bottom: 1px solid rgba(255,255,255,.05); font-size: 12.5px; }
   .runrow:last-child { border-bottom: none; }
@@ -756,6 +775,7 @@ const IC = {
   pencil:'<path d="M4 20h4L20 8l-4-4L4 16z"/>',
   ban:'<circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/>',
   check:'<path d="M5 13l4 4L19 7"/>',
+  chev:'<path d="M9 6l6 6-6 6"/>',
 };
 function icon(name, cls) {
   return `<svg class="i ${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[name] || ''}</svg>`;
@@ -1242,24 +1262,148 @@ async function editKnownSkills() {
 const EV_ICON = { created:"plus", phase_change:"refresh", email_rejected:"ban", email_interview:"mic",
                   email_offer:"check", email_oa:"file", email_update:"mail" };
 
+// Each automation card: what it does + which workflow it dispatches.
+const ACT_META = {
+  monitor: { key:"monitor", ico:"bot", name:"Job monitor", wf:"Job Monitor",
+    explain:"Runs on a schedule on GitHub Actions: scrapes every configured job board and ATS feed, applies the filter (real intern/co-op roles, region, current recruiting cycle — nothing hardcoded), dedupes against the seen-jobs set, scores the new matches with the AI, alerts your channel, and pushes them into the tracker as Found." },
+  push: { key:"push", ico:"inbox", name:"Monitor → tracker push", wf:"Job Monitor",
+    explain:"The sync-tracker pass: re-scrapes and pushes every currently-open match into the tracker in idempotent chunks (INSERT-OR-IGNORE, so re-running never duplicates), even roles that were 'seen' before the tracker existed. Each chunk gets a background AI-match + description-enrichment window." },
+  gmail: { key:"gmail", ico:"mail", name:"Gmail watcher", wf:"Job Monitor",
+    explain:"Reads new mail over IMAP, prefilters to plausible job senders, has the AI classify each one (rejected / interview / OA / offer / update), posts events to the tracker — a confident 'rejected' auto-flips that job's phase, everything else is logged for you to action — notifies your channel, and advances the IMAP checkpoint." },
+  profile: { key:"profile", ico:"sync", name:"Profile sync", wf:"Profile Sync",
+    explain:"Pushes your living profile (your resume, plus any extra context source) into the tracker's meta store. Every future AI match and full rematch reads it, so updating your resume and running this re-grounds all scoring on the current you." },
+};
+
 async function loadActivity() {
   const el = $("page-activity");
   el.innerHTML = skelCards(2);
-  const a = await apiCall("/activity");
+  const a = window._activity = await apiCall("/activity");
   const hb = a.heartbeats || {};
   const mon = hb.sys_last_monitor, push = hb.sys_last_monitor_push,
         gm = hb.sys_last_gmail, prof = hb.sys_last_profile_sync;
 
-  const hbCard = (ico, name, obj, extra) => `
-    <div class="glass hb">
-      <div class="ic">${icon(ico)}</div>
-      <div class="t"><b>${name}</b>
+  const hbCard = (key, obj, extra) => {
+    const m = ACT_META[key];
+    return `<div class="glass hb clickable" data-act="${key}">
+      <div class="ic">${icon(m.ico)}</div>
+      <div class="t"><b>${m.name}</b>
         <div class="when">${obj?.ts ? rel(obj.ts) : "no heartbeat yet"}</div>
         <div class="meta2">${extra}</div>
       </div>
+      <span class="chev">${icon("chev")}</span>
     </div>`;
+  };
 
-  const runs = a.runs ? a.runs.map(r => {
+  const feed = (a.events || []).map(e => `
+    <div class="runrow">
+      <span class="evi">${icon(EV_ICON[e.type] || "file")}</span>
+      <span class="name">${esc(e.company || "?")}</span>
+      <span class="ev">${esc(e.type)}${e.detail ? " — " + esc(e.detail) : ""}</span>
+      <span class="spacer"></span>
+      <span class="date">${rel(e.ts)}</span>
+    </div>`).join("") || '<div class="hint">No job events yet.</div>';
+
+  el.innerHTML = `
+    <div class="kpis">
+      ${hbCard("monitor", mon,
+          mon ? `${mon.matched} matched · ${mon.new} new · ${mon.notified} notified` : "runs on a schedule")}
+      ${hbCard("push", push,
+          push ? `${push.inserted}/${push.received} added as found` : "fires when alerts land")}
+      ${hbCard("gmail", gm,
+          gm ? `${gm.emails} email(s) scanned · ${gm.events} event(s)` : "runs on a schedule")}
+      ${hbCard("profile", prof,
+          prof ? `${(prof.chars || 0).toLocaleString()} chars (${esc(prof.key || "")})` : "not synced yet")}
+    </div>
+    <div id="actPanelHost"></div>
+    <div class="grid">
+      <div class="glass card"><h3>Workflow runs
+        <span class="sub">straight from GitHub Actions</span></h3><div id="runsList"></div></div>
+      <div class="glass card feed"><h3>Recent job events
+        <span class="sub">creates, phase changes, email verdicts</span></h3>${feed}</div>
+    </div>`;
+  renderRunsList(a);
+
+  // Click a card → toggle its explain-and-run panel below the row.
+  el.querySelectorAll(".hb[data-act]").forEach(card => card.onclick = () => {
+    const key = card.dataset.act, host = $("actPanelHost");
+    const already = card.classList.contains("open");
+    el.querySelectorAll(".hb").forEach(c => c.classList.remove("open"));
+    if (already) { host.innerHTML = ""; return; }
+    card.classList.add("open");
+    renderActPanel(key);
+  });
+}
+
+function renderActPanel(key) {
+  const m = ACT_META[key], a = window._activity || {};
+  const can = a.can_dispatch;
+  const host = $("actPanelHost");
+  host.innerHTML = `
+    <div class="glass actpanel"><div class="inner">
+      <h4>${icon(m.ico)} ${esc(m.name)}</h4>
+      <p>${esc(m.explain)}</p>
+      <div class="runbar">
+        <button class="primary" id="actRun" ${can ? "" : "disabled"}>${icon("zap")}Run now</button>
+        <div class="prog" id="actProg" hidden><div class="fill"></div></div>
+        <span class="rstatus" id="actStatus">${can
+          ? "Triggers the <b>" + esc(m.wf) + "</b> workflow on GitHub Actions."
+          : "Read-only: add a fine-grained PAT with <b>Actions: Read and write</b> as the <code>github_token</code> terraform var to enable one-click runs."}</span>
+      </div>
+    </div></div>`;
+  const btn = $("actRun");
+  if (btn && can) btn.onclick = () => runAction(key);
+}
+
+async function runAction(key) {
+  const m = ACT_META[key];
+  const btn = $("actRun"), prog = $("actProg"), status = $("actStatus");
+  btn.disabled = true;
+  prog.hidden = false; prog.className = "prog run";
+  status.innerHTML = "Dispatching…";
+  let dispatchedAt;
+  try {
+    const res = await apiCall("/activity/dispatch", { method:"POST", body: JSON.stringify({ action: key }) });
+    dispatchedAt = new Date(res.dispatched_at).getTime();
+    status.innerHTML = "Queued on GitHub Actions…";
+  } catch (e) {
+    prog.className = "prog fail"; status.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
+    btn.disabled = false; return;
+  }
+  // Poll the runs feed for this workflow's freshly-dispatched run until it finishes.
+  const started = Date.now();
+  const tick = async () => {
+    let run = null;
+    try {
+      const a = await apiCall("/activity");
+      window._activity = a;
+      renderRunsList(a);
+      run = (a.runs || []).find(r => r.name === m.wf && r.event === "workflow_dispatch"
+        && new Date(r.started_at).getTime() >= dispatchedAt - 20000);
+    } catch {}
+    if (run) {
+      if (run.status === "completed") {
+        const ok = run.conclusion === "success";
+        prog.className = "prog " + (ok ? "done" : "fail");
+        status.innerHTML = ok
+          ? `Completed ✓ <a href="${esc(run.url)}" target="_blank" rel="noopener">run #${run.run_number} ↗</a>`
+          : `<span style="color:var(--red)">Finished: ${esc(run.conclusion || "failed")}</span> <a href="${esc(run.url)}" target="_blank" rel="noopener">↗</a>`;
+        btn.disabled = false;
+        setTimeout(() => { if ($("page-activity").offsetParent !== null) loadActivity(); }, 3000);
+        return;
+      }
+      status.innerHTML = `Running… <span class="hint">#${run.run_number} · ${esc(run.status)}</span>`;
+    }
+    if (Date.now() - started > 5 * 60 * 1000) {
+      status.innerHTML = "Still running — check the Workflow runs list below."; btn.disabled = false; return;
+    }
+    setTimeout(tick, 4000);
+  };
+  setTimeout(tick, 3500);
+}
+
+function renderRunsList(a) {
+  const host = $("runsList"); if (!host) return;
+  host.innerHTML = a.runs ? a.runs.map(r => {
     const dot = r.status !== "completed" ? "busy" : r.conclusion === "success" ? "ok" : "bad";
     const dur = r.started_at && r.updated_at
       ? Math.max(1, Math.round((new Date(r.updated_at) - new Date(r.started_at)) / 1000)) + "s" : "";
@@ -1273,33 +1417,6 @@ async function loadActivity() {
       <a href="${esc(r.url)}" target="_blank" rel="noopener">↗</a>
     </div>`;
   }).join("") : `<div class="hint">Workflow runs unavailable: ${esc(a.runs_error || "unknown")}.</div>`;
-
-  const feed = (a.events || []).map(e => `
-    <div class="runrow">
-      <span class="evi">${icon(EV_ICON[e.type] || "file")}</span>
-      <span class="name">${esc(e.company || "?")}</span>
-      <span class="ev">${esc(e.type)}${e.detail ? " — " + esc(e.detail) : ""}</span>
-      <span class="spacer"></span>
-      <span class="date">${rel(e.ts)}</span>
-    </div>`).join("") || '<div class="hint">No job events yet.</div>';
-
-  el.innerHTML = `
-    <div class="kpis">
-      ${hbCard("bot", "Job monitor", mon,
-          mon ? `${mon.matched} matched · ${mon.new} new · ${mon.notified} notified` : "runs hourly on Actions")}
-      ${hbCard("inbox", "Monitor → tracker push", push,
-          push ? `${push.inserted}/${push.received} added as found` : "fires when alerts land")}
-      ${hbCard("mail", "Gmail watcher", gm,
-          gm ? `${gm.emails} email(s) scanned · ${gm.events} event(s)` : "runs every 2h on Actions")}
-      ${hbCard("sync", "Profile sync", prof,
-          prof ? `${(prof.chars || 0).toLocaleString()} chars (${esc(prof.key || "")})` : "run scripts/sync_profile.py")}
-    </div>
-    <div class="grid">
-      <div class="glass card"><h3>Workflow runs
-        <span class="sub">straight from GitHub Actions</span></h3>${runs}</div>
-      <div class="glass card feed"><h3>Recent job events
-        <span class="sub">creates, phase changes, email verdicts</span></h3>${feed}</div>
-    </div>`;
 }
 
 /* ── detail ─────────────────────────────────────────────────────────────── */
