@@ -6,6 +6,8 @@
 
 > I built this because I hated last summer's internship hunt — hundreds of tabs, copy-pasting the same resume, missing postings because I saw them a day late. I wanted one place that did the finding, the tailoring, and the tracking for me, and that I could open from my phone, my school laptop, anywhere.
 
+> **How I actually use it (so there's no wrong impression):** I keep a list of the specific companies and roles I genuinely want so I catch them on time — while it also surfaces strong new ones I'd have missed. Every match is triage, not a decision: I research each company myself, and I treat the generated resume/cover letter as a *baseline* I review and edit by hand. Nothing goes out that I haven't personally checked and made my own. The automation removes the busywork; the judgment and effort stay mine.
+
 **Two deep-dives:** &nbsp; **[How I built it (design decisions) →](docs/HOW_I_BUILT_IT.md)** &nbsp;·&nbsp; **[Set it up yourself →](docs/SETUP.md)**
 
 ## Preview
