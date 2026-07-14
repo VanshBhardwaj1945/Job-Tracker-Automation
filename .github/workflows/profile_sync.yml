@@ -1,0 +1,35 @@
+name: Profile Sync
+
+# Master_Resume.md changed → push it into the tracker's D1 and queue AI
+# re-matching, so every "how this matches you" answer uses the latest resume.
+# (Extra's block lives in the private portfolio repo — sync that locally with
+#  `python scripts/sync_profile.py`.)
+
+on:
+  push:
+    branches: [main]
+    paths: ["Master_Resume.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Sync resume → tracker
+        env:
+          TRACKER_URL:           ${{ secrets.TRACKER_URL }}
+          TRACKER_CLIENT_ID:     ${{ secrets.TRACKER_CLIENT_ID }}
+          TRACKER_CLIENT_SECRET: ${{ secrets.TRACKER_CLIENT_SECRET }}
+        run: python scripts/sync_profile.py --resume-only

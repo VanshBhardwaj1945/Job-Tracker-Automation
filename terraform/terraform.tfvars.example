@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+
+cloudflare_account_id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+zone_id               = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" # example.com
+team_domain           = "yourteam.cloudflareaccess.com"
+anthropic_api_key     = "sk-ant-..."
+
+# Optional — defaults shown:
+# tracker_hostname    = "jobs.example.com"
+# allowed_email       = "you@example.com"
+# cloudflare_api_token = ""   # or: export CLOUDFLARE_API_TOKEN=...

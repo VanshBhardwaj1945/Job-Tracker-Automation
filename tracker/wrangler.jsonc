@@ -1,0 +1,28 @@
+// LOCAL DEV ONLY — production deploys go through ../terraform (terraform apply).
+// `npm run dev` gives you a local worker with a local D1 database.
+{
+  "name": "job-tracker",
+  "main": "dist/worker.js",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "job_tracker",
+      "database_id": "local-dev-placeholder"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "DOCS",
+      "bucket_name": "job-tracker-docs"
+    }
+  ],
+  "vars": {
+    // Auth is bypassed when DEV_MODE=1 (never set in production — terraform doesn't set it).
+    "DEV_MODE": "1",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    "GITHUB_REPO": "YOUR_GITHUB_USERNAME/job-monitor"
+  }
+}

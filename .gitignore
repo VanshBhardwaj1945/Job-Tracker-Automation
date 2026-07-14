@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+
+# tracker worker
+tracker/node_modules/
+tracker/dist/
+tracker/.wrangler/
+
+# terraform — state and secrets never get committed
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+
+# --- open-source hygiene: never commit real config/state/secrets ---
+.env
+*.env
+data/profile.json
+data/companies_master.json
+data/company_registry.json
+data/seen_jobs.json
+data/resume.md
+**/terraform.tfvars
+**/*.tfstate
+**/*.tfstate.*
+.DS_Store

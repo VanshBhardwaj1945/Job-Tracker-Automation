@@ -1,0 +1,51 @@
+name: Tracker CI
+
+# Validates the tracker worker + terraform on every change to those paths.
+# Deploys stay local by design (terraform state lives on the candidate's machine):
+#   cd tracker && npm run build && cd ../terraform && terraform apply
+
+on:
+  push:
+    branches: [main]
+    paths: ["tracker/**", "terraform/**", ".github/workflows/tracker_ci.yml"]
+  pull_request:
+    paths: ["tracker/**", "terraform/**", ".github/workflows/tracker_ci.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  tracker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tracker/package-lock.json
+
+      - name: Install
+        working-directory: tracker
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: tracker
+        run: npm run check
+
+      - name: Build worker bundle
+        working-directory: tracker
+        run: npm run build
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt
+        working-directory: terraform
+        run: terraform fmt -check -diff
+
+      - name: Terraform validate
+        working-directory: terraform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate

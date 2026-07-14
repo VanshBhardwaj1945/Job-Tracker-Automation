@@ -1,0 +1,23 @@
+{
+  "name": "job-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Job application tracker — Cloudflare Worker + D1. Deployed by Terraform (../terraform), wrangler is for local dev only.",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --outfile=dist/worker.js --loader:.html=text --minify-syntax --external:node:*",
+    "check": "tsc --noEmit",
+    "dev": "npm run build && wrangler dev"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
+    "docx": "^9.7.1",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^3.90.0"
+  }
+}

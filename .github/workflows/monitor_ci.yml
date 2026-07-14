@@ -1,0 +1,36 @@
+name: Monitor CI
+
+# Runs on EVERY push: compile-check the whole python pipeline and run the
+# job-finder's filter self-check (pure, no network, no secrets, no spam).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compile-check all modules
+        run: python -m py_compile monitor/*.py scripts/*.py
+
+      - name: Filter self-check (job-finder pipeline)
+        run: python monitor/scraper.py --check
+
+      - name: Import smoke test (gmail watcher + tracker client + sync script)
+        run: |
+          cd monitor && python -c "import gmail_watch, tracker_client, notify, sources, ai_score, classify, digest" && cd ..
+          python -c "import ast, pathlib; ast.parse(pathlib.Path('scripts/sync_profile.py').read_text())"

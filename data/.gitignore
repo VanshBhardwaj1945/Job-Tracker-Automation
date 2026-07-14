@@ -1,0 +1,6 @@
+# runtime state + your real config (never commit)
+profile.json
+companies_master.json
+company_registry.json
+seen_jobs.json
+resume.md

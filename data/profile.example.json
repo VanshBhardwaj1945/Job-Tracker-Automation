@@ -1,0 +1,20 @@
+{
+  "_comment": "Copy to profile.json (gitignored) and make it yours. This is the ONE file that describes you; the AI scores every posting against candidate.summary + role_ranking.",
+  "candidate": {
+    "name": "Your Name",
+    "level": "undergraduate",
+    "summary": "One or two sentences: who you are and what you're targeting. This is what the AI scores each posting against. e.g. 'CS student targeting backend / cloud internships; Python, AWS, Docker, some Kubernetes.'"
+  },
+  "role_ranking": [
+    { "role": "Your #1 target role type", "weight": 10 },
+    { "role": "A strong fallback", "weight": 7 },
+    { "role": "Acceptable", "weight": 5 }
+  ],
+  "categories": {
+    "_comment": "Keyword lists per priority bucket. 'security' = your top-priority bucket (always kept, shown first); 'relevant_swe' = adjacent. Rename/retune freely — these feed the coarse keyword filter before the AI refines.",
+    "security": ["example", "keywords", "for", "your", "top", "category"],
+    "relevant_swe": ["adjacent", "keywords", "cloud", "backend", "devops"]
+  },
+  "include_other_swe": false,
+  "ai_scoring": { "enabled": true, "model": "claude-haiku-4-5-20251001", "min_score": 5 }
+}

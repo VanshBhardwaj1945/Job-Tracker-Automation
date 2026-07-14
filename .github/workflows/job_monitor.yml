@@ -1,0 +1,136 @@
+name: Job Monitor
+
+on:
+  schedule:
+    - cron: "7 * * * *"     # hourly — intern postings die fast, be early
+    - cron: "0 14 * * 1"    # Monday 14:00 UTC — weekly health report
+    - cron: "23 */2 * * *"  # every 2h — gmail watcher (tracker email events)
+    - cron: "0 22 * * 0"    # Sunday 22:00 UTC — weekly digest + tracker housekeeping
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode"
+        required: true
+        default: "normal"
+        type: choice
+        options:
+          - normal
+          - test
+          - classify
+          - reclassify-all
+          - health
+          - gmail
+          - digest
+          - sync-tracker
+
+concurrency:
+  group: job-monitor
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Test notification + filter self-check
+        if: ${{ github.event.inputs.mode == 'test' }}
+        env:
+          EMAIL_SENDER:        ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:      ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:            ${{ secrets.EMAIL_TO }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python monitor/scraper.py --test
+
+      - name: Classify companies (incremental)
+        if: ${{ github.event.inputs.mode == 'classify' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python monitor/classify.py
+
+      - name: Re-classify everything
+        if: ${{ github.event.inputs.mode == 'reclassify-all' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python monitor/classify.py --force
+
+      - name: Weekly health report
+        if: ${{ github.event.inputs.mode == 'health' || github.event.schedule == '0 14 * * 1' }}
+        env:
+          EMAIL_SENDER:        ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:      ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:            ${{ secrets.EMAIL_TO }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python monitor/scraper.py --health
+
+      - name: Gmail watcher (tracker email events)
+        if: ${{ github.event.inputs.mode == 'gmail' || github.event.schedule == '23 */2 * * *' }}
+        env:
+          EMAIL_SENDER:          ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:        ${{ secrets.EMAIL_PASSWORD }}
+          DISCORD_WEBHOOK_URL:   ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+          TRACKER_URL:           ${{ secrets.TRACKER_URL }}
+          TRACKER_CLIENT_ID:     ${{ secrets.TRACKER_CLIENT_ID }}
+          TRACKER_CLIENT_SECRET: ${{ secrets.TRACKER_CLIENT_SECRET }}
+        run: python monitor/gmail_watch.py
+
+      - name: Sync tracker (backfill all open matches)
+        if: ${{ github.event.inputs.mode == 'sync-tracker' }}
+        env:
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+          TRACKER_URL:           ${{ secrets.TRACKER_URL }}
+          TRACKER_CLIENT_ID:     ${{ secrets.TRACKER_CLIENT_ID }}
+          TRACKER_CLIENT_SECRET: ${{ secrets.TRACKER_CLIENT_SECRET }}
+        run: python monitor/scraper.py --sync-tracker
+
+      - name: Weekly digest + tracker housekeeping
+        if: ${{ github.event.inputs.mode == 'digest' || github.event.schedule == '0 22 * * 0' }}
+        env:
+          DISCORD_WEBHOOK_URL:   ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TRACKER_URL:           ${{ secrets.TRACKER_URL }}
+          TRACKER_CLIENT_ID:     ${{ secrets.TRACKER_CLIENT_ID }}
+          TRACKER_CLIENT_SECRET: ${{ secrets.TRACKER_CLIENT_SECRET }}
+        run: python monitor/digest.py
+
+      - name: Run job monitor
+        if: ${{ github.event.inputs.mode == 'normal' || github.event.schedule == '7 * * * *' }}
+        env:
+          EMAIL_SENDER:          ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:        ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:              ${{ secrets.EMAIL_TO }}
+          DISCORD_WEBHOOK_URL:   ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+          TRACKER_URL:           ${{ secrets.TRACKER_URL }}
+          TRACKER_CLIENT_ID:     ${{ secrets.TRACKER_CLIENT_ID }}
+          TRACKER_CLIENT_SECRET: ${{ secrets.TRACKER_CLIENT_SECRET }}
+        run: python monitor/scraper.py
+
+      - name: Commit updated data files
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash || true
+          git add data/seen_jobs.json data/company_registry.json
+          git diff --staged --quiet || git commit -m "chore: update data files [skip ci]"
+          git push
