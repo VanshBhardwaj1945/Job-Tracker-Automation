@@ -1,4 +1,9 @@
-# AGENTS.md — invariants for anyone (human or AI) editing this repo
+# AGENTS.md
+
+> **Setting this up for someone?** (OpenAI Codex, Cursor, Windsurf, or any
+> AGENTS.md-aware assistant): follow **[docs/CONFIGURE_WITH_AI.md](docs/CONFIGURE_WITH_AI.md)**
+> to interview the user and configure the repo. The invariants below apply to all edits.
+
 
 1. **Fail-open / fail-soft.** A dependency being down (tracker, an ATS, an API
    key) must never take a run down. Log and continue.

@@ -16,12 +16,9 @@ import logging
 import os
 import re
 
-import requests
+import ai_client
 
 log = logging.getLogger(__name__)
-
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-API_URL = "https://api.anthropic.com/v1/messages"
 
 PROMPT = """You are screening internship postings for this candidate:
 
@@ -55,13 +52,13 @@ def score_jobs(jobs: list, profile: dict) -> list:
     """Mutates jobs in place: adds ai_score/ai_reason, may re-assign category.
     Returns the filtered list (score >= min_score). Fail-open on any error."""
     cfg = profile.get("ai_scoring", {})
-    if not cfg.get("enabled", True) or not ANTHROPIC_API_KEY or not jobs:
-        if not ANTHROPIC_API_KEY:
-            log.info("AI scoring skipped (no ANTHROPIC_API_KEY)")
+    if not cfg.get("enabled", True) or not ai_client.available() or not jobs:
+        if not ai_client.available():
+            log.info("AI scoring skipped (no AI provider configured — set AI_PROVIDER + key)")
         return [j for j in jobs if j["category"] != "other_swe"
                 or profile.get("include_other_swe")]
 
-    model = cfg.get("model", "claude-haiku-4-5-20251001")
+    model = cfg.get("model") or ai_client.default_model()
     min_score = cfg.get("min_score", 5)
     summary = profile.get("candidate", {}).get("summary", "")
     ranking = "\n".join(
@@ -79,20 +76,10 @@ def score_jobs(jobs: list, profile: dict) -> list:
             for i, j in enumerate(batch)
         ], indent=1)
         try:
-            r = requests.post(
-                API_URL,
-                headers={"x-api-key": ANTHROPIC_API_KEY,
-                         "anthropic-version": "2023-06-01",
-                         "content-type": "application/json"},
-                json={"model": model, "max_tokens": 2000,
-                      "messages": [{"role": "user", "content":
-                                    PROMPT.format(summary=summary, ranking=ranking,
-                                                  jobs=listing)}]},
-                timeout=60,
+            text = ai_client.complete(
+                PROMPT.format(summary=summary, ranking=ranking, jobs=listing),
+                max_tokens=2000, model=model,
             )
-            if r.status_code != 200:
-                raise RuntimeError(f"API {r.status_code}: {r.text[:150]}")
-            text = r.json()["content"][0]["text"]
             text = re.sub(r"```(?:json)?", "", text).strip()
             results = {item["i"]: item for item in json.loads(text)}
         except Exception as e:

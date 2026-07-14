@@ -46,7 +46,7 @@ A production-shaped, serverless, AI-driven system — not a tutorial. Every piec
 | **Auth** | Cloudflare Zero Trust Access (email policy + service tokens), Worker-side JWT verification |
 | **IaC** | Terraform (Cloudflare provider) |
 | **Automation** | GitHub Actions (cron), Python 3.12 |
-| **AI** | Anthropic Claude — Haiku (matching/extraction), Opus (documents), Message Batches |
+| **AI** | Any provider — Anthropic / OpenAI / Gemini / local (Ollama); Message Batches + prompt caching |
 | **Notifications** | Discord webhooks, Gmail (IMAP + SMTP) |
 | **Frontend** | Single-page dark UI (no framework), PWA (installable) |
 
@@ -85,21 +85,37 @@ keywords that describe your field, and a short summary of your background. From 
 The result: you tell it your targets once, and it keeps finding both those *and* the ones you'd
 have wished you'd seen — already sorted by how well they fit you.
 
-## Run it your way
+## Use any AI, host it anywhere
 
-You choose how much cloud to use:
+**Any AI provider.** Scoring and document generation route through one client
+(`monitor/ai_client.py`) — set `AI_PROVIDER` to **Anthropic**, **OpenAI**,
+**Google Gemini**, or a **local model** (Ollama / any OpenAI-compatible server, for
+free & private). Override the model with `AI_MODEL`.
 
-- **Fully hosted (recommended):** deploy the Worker + D1 + R2 + Access with Terraform, run the monitor on GitHub Actions cron. Nothing to keep running; open the dashboard from anywhere.
-- **Local:** `wrangler dev` runs the whole Worker (UI + API) against a local D1 + R2; run the Python monitor on your own machine. No cloud account needed to try it.
-- **Container:** a `Dockerfile` runs the monitor pipeline anywhere (host cron, Kubernetes CronJob, etc.) — see `.env.example`.
+**Any host.** Pick your budget and comfort level:
 
-## Make it yours (with Claude)
+- **Just the finder — free:** run the Python monitor on your laptop, in **Docker**,
+  on your **own server** (cron/systemd), or on **GitHub Actions** cron.
+- **The full hosted dashboard:** Cloudflare Workers + D1 + R2 + Access via Terraform
+  is the one-command reference — but the tracker is a portable Hono app, and the docs
+  map every piece to **AWS / GCP / Azure / self-hosted** (compute, database, object
+  storage, auth). Try the whole thing locally first with `wrangler dev` (no cloud
+  account needed).
 
-This repo is built to be configured by **Claude Code**. Open the folder in Claude and say *"set this up for me"* — [`CLAUDE.md`](CLAUDE.md) tells Claude to interview you (what roles, which companies, how often, notifications, where to host, your identity for resumes) and fill in every config file. Or do it by hand:
+Full matrix and step-by-step: **[Set it up yourself](docs/SETUP.md)**.
+
+## Make it yours (with any AI assistant)
+
+This repo is built to be configured by whatever AI coding assistant you use —
+**Claude Code** ([`CLAUDE.md`](CLAUDE.md)), **Gemini CLI** ([`GEMINI.md`](GEMINI.md)),
+**OpenAI Codex / Cursor / others** ([`AGENTS.md`](AGENTS.md)). Open the folder and
+say *"set this up for me"*; it interviews you (roles, companies, schedule,
+notifications, where to host, your identity for resumes) and fills in every config
+file — see [`docs/CONFIGURE_WITH_AI.md`](docs/CONFIGURE_WITH_AI.md). Or by hand:
 
 1. `cp data/profile.example.json data/profile.json` and describe who you are + what you're targeting.
-2. Add your resume as `data/resume.md` (or sync it — see the docs).
-3. Pick a run mode above and follow [the docs](docs/FULL_DOCUMENTATION.md).
+2. Add your resume as `data/resume.md`.
+3. Pick a setup from [Set it up yourself](docs/SETUP.md).
 
 ## Repo layout
 

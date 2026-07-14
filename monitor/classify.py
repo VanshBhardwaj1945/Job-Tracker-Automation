@@ -41,8 +41,7 @@ DATA_DIR = BASE_DIR.parent / "data"  # data/ lives at repo root
 MASTER_FILE = DATA_DIR / "companies_master.json"
 REGISTRY_FILE = DATA_DIR / "company_registry.json"
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL = "claude-haiku-4-5-20251001"
+import ai_client  # provider-agnostic LLM client (Anthropic / OpenAI / Gemini / local)
 
 # ── Curated Workday seeds (tenant, wd domain, board) ─────────────────────────
 # Only entries with real public Workday boards. The old list contained
@@ -225,8 +224,8 @@ def probe_workday(name, tenant_hint=None, board_hint=None):
 
 # ── Claude fallback ───────────────────────────────────────────────────────────
 def classify_with_claude(companies):
-    if not ANTHROPIC_API_KEY:
-        log.warning("No ANTHROPIC_API_KEY — leaving unprobeable companies 'unknown' "
+    if not ai_client.available():
+        log.warning("No AI provider configured — leaving unprobeable companies 'unknown' "
                     "(still covered by the Simplify feed)")
         return {c: {"ats": "unknown"} for c in companies}
 
@@ -245,23 +244,11 @@ ats options: greenhouse | lever | ashby | smartrecruiters | workday | eightfold
 | icims | taleo | oracle | phenom | custom | unknown.
 No markdown, no explanation."""
         try:
-            r = SESSION.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={"x-api-key": ANTHROPIC_API_KEY,
-                         "anthropic-version": "2023-06-01",
-                         "content-type": "application/json"},
-                json={"model": CLAUDE_MODEL, "max_tokens": 2000,
-                      "messages": [{"role": "user", "content": prompt}]},
-                timeout=45)
-            if r.status_code == 200:
-                text = re.sub(r"```(?:json)?", "",
-                              r.json()["content"][0]["text"]).strip()
-                results.update(json.loads(text))
-            else:
-                log.warning(f"Claude API {r.status_code}: {r.text[:150]}")
-                results.update({c: {"ats": "unknown"} for c in batch})
+            text = ai_client.complete(prompt, max_tokens=2000, timeout=45)
+            text = re.sub(r"```(?:json)?", "", text).strip()
+            results.update(json.loads(text))
         except Exception as e:
-            log.warning(f"Claude classification failed: {e}")
+            log.warning(f"AI classification failed: {e}")
             results.update({c: {"ats": "unknown"} for c in batch})
         time.sleep(1)
     return results

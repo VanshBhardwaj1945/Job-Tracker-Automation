@@ -1,7 +1,7 @@
-# CLAUDE.md — for Claude Code
+# GEMINI.md — for Gemini CLI
 
-You are Claude Code helping a new user set up this repo for their own job hunt.
-This project finds jobs, AI-scores them against the user's profile, tracks
+You are Gemini helping a new user set up this repo for their own job hunt. This
+project finds jobs, AI-scores them against the user's profile, tracks
 applications, and generates tailored resumes/cover letters.
 
 **Read [`docs/CONFIGURE_WITH_AI.md`](docs/CONFIGURE_WITH_AI.md)** and follow the

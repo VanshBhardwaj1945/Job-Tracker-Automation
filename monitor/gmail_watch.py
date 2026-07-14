@@ -48,9 +48,7 @@ log = logging.getLogger(__name__)
 
 EMAIL_SENDER = os.environ.get("EMAIL_SENDER", "")
 EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-haiku-4-5-20251001"  # same as ai_score.py
+import ai_client  # provider-agnostic LLM client (Anthropic / OpenAI / Gemini / local)
 
 MAX_MESSAGES_PER_RUN = 200
 BATCH = 20
@@ -218,20 +216,13 @@ def classify(messages: list[dict], companies: list[str]) -> list[dict]:
              "body": m["body"][:1800]}
             for i, m in enumerate(batch)
         ], indent=1)
-        r = requests.post(
-            API_URL,
-            headers={"x-api-key": ANTHROPIC_API_KEY,
-                     "anthropic-version": "2023-06-01",
-                     "content-type": "application/json"},
-            json={"model": MODEL, "max_tokens": 2000,
-                  "messages": [{"role": "user", "content": CLASSIFY_PROMPT.format(
-                      companies=", ".join(companies[:80]) or "(none tracked yet)",
-                      emails=listing)}]},
-            timeout=90,
+        text = ai_client.complete(
+            CLASSIFY_PROMPT.format(
+                companies=", ".join(companies[:80]) or "(none tracked yet)",
+                emails=listing),
+            max_tokens=2000, timeout=90,
         )
-        if r.status_code != 200:
-            raise RuntimeError(f"Anthropic API {r.status_code}: {r.text[:200]}")
-        text = re.sub(r"```(?:json)?", "", r.json()["content"][0]["text"]).strip()
+        text = re.sub(r"```(?:json)?", "", text).strip()
         for item in json.loads(text):
             i = item.get("i")
             if not isinstance(i, int) or not (0 <= i < len(batch)):
@@ -252,8 +243,8 @@ def run(dry_run: bool = False) -> None:
     if not (EMAIL_SENDER and EMAIL_PASSWORD):
         log.error("EMAIL_SENDER/EMAIL_PASSWORD not set — cannot read inbox.")
         return
-    if not ANTHROPIC_API_KEY:
-        log.error("ANTHROPIC_API_KEY not set — cannot classify. Skipping run.")
+    if not ai_client.available():
+        log.error("No AI provider configured (AI_PROVIDER + key) — cannot classify. Skipping run.")
         return
     if not tracker_client.enabled() and not dry_run:
         log.error("TRACKER_URL/TRACKER_CLIENT_ID/TRACKER_CLIENT_SECRET not set.")
