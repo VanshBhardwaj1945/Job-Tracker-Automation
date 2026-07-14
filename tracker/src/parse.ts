@@ -146,14 +146,35 @@ async function fetchWorkdayJson(url: string): Promise<string | null> {
   return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
 
+/** Ashby postings are JS-rendered, but the public job-board API isn't. */
+async function fetchAshbyJson(url: string): Promise<string | null> {
+  const m = url.match(/^https:\/\/jobs\.ashbyhq\.com\/([^/]+)\/([0-9a-f-]{20,})/i);
+  if (!m) return null;
+  const [, org, jobId] = m;
+  const res = await fetch(`https://api.ashbyhq.com/posting-api/job-board/${org}`, {
+    headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { jobs?: Array<{ id: string; descriptionHtml?: string; description?: string }> };
+  const job = (body.jobs ?? []).find((j) => j.id === jobId);
+  const html = job?.descriptionHtml || job?.description || "";
+  if (!html) return null;
+  return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /** Fetch a job posting URL and reduce it to text. Many boards (LinkedIn!) block
  *  server-side fetches — callers should surface a "paste the description" hint. */
 export async function fetchUrlText(rawUrl: string): Promise<string> {
   if (!/^https?:\/\//i.test(rawUrl)) throw new Error("only http(s) URLs are supported");
   const url = normalizePostingUrl(rawUrl);
+  // JS-rendered boards with a JSON API behind them — try that first.
   try {
     const wd = await fetchWorkdayJson(url);
     if (wd && wd.length >= 300) return wd;
+  } catch { /* fall through */ }
+  try {
+    const ash = await fetchAshbyJson(url);
+    if (ash && ash.length >= 300) return ash;
   } catch { /* fall through to plain fetch */ }
   const res = await fetch(url, {
     headers: {
