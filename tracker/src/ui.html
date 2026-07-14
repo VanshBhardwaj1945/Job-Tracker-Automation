@@ -243,6 +243,16 @@
   .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
   .donutwrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .hint { color: var(--muted); font-size: 12.5px; }
+  .skgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .skhead { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+    margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid var(--stroke); font-weight: 600; }
+  .skhead.have { color: var(--green); } .skhead.miss { color: var(--amber); }
+  .skhead .n { color: var(--dim); font-weight: 500; }
+  .skrow { display: flex; align-items: center; gap: 8px; padding: 3px 4px; font-size: 12.5px; border-radius: 4px; }
+  .skrow:hover { background: var(--surface2); }
+  .skrow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .skrow .ct { color: var(--dim); font-size: 11px; font-feature-settings: var(--tnum); }
+  @media (max-width: 620px) { .skgrid { grid-template-columns: 1fr; } }
 
   /* ── activity page ──────────────────────────────────────────────────────── */
   .hb { display: flex; align-items: center; gap: 13px; padding: 15px 17px; }
@@ -936,10 +946,11 @@ function bars(rows, lblKey, valKey, cls = "") {
 }
 
 /* ── analytics ──────────────────────────────────────────────────────────── */
+let _stats = null;
 async function loadAnalytics() {
   const el = $("page-analytics");
   el.innerHTML = skelCards(8);
-  const s = await apiCall("/stats");
+  const s = _stats = await apiCall("/stats");
   const total = Object.values(s.phases).reduce((a,b) => a+b, 0);
   const appliedTotal = ["applied","oa","interview","offer","accepted","rejected"]
     .reduce((a,p) => a + (s.phases[p] || 0), 0);
@@ -1011,11 +1022,15 @@ async function loadAnalytics() {
       <div class="glass card"><h3>Pipeline funnel</h3>${bars(funnel, "label", "n")}</div>
       <div class="glass card"><h3>Applied by category</h3>${bars(catApplied, "label", "n", "alt")}</div>
       <div class="glass card"><h3>Where jobs come from</h3>${bars(sources, "label", "n", "alt")}</div>
-      <div class="glass card"><h3>Tools & buzzwords — applied jobs
-        <span class="sub">what shows up in roles you chase → project-idea signal</span></h3>
-        ${bars(s.skills.applied.map(x => ({label:x.skill, n:x.count})), "label", "n")}</div>
-      <div class="glass card"><h3>Tools & buzzwords — everywhere</h3>
-        ${bars(s.skills.all.map(x => ({label:x.skill, n:x.count})), "label", "n")}</div>
+      <div class="glass card" style="grid-column: 1 / -1">
+        <h3>Tools &amp; buzzwords
+          <span class="sub">what shows up where — and, vs your toolkit, what you already have vs should learn</span></h3>
+        <div class="row2" style="margin-bottom:10px; flex-wrap:wrap">
+          <select id="skScope"></select>
+          <a class="out" id="skEdit" style="font-size:11.5px; cursor:pointer">Edit my skills</a>
+        </div>
+        <div id="skView"></div>
+      </div>
       <div class="glass card"><h3>Top companies</h3>
         ${bars(s.companies.map(x => ({label:x.company, n:x.n})), "label", "n", "alt")}</div>
       <div class="glass card"><h3>Top locations</h3>
@@ -1029,6 +1044,63 @@ async function loadAnalytics() {
         </div>
         ${endpointRows}</div>
     </div>`;
+
+  // ── interactive Tools & buzzwords (scope + have/missing) ──
+  const scopeSel = $("skScope");
+  const catsWithSkills = Object.keys(s.skills.by_category || {})
+    .filter(c => (s.skills.by_category[c] || []).length)
+    .sort((a,b) => (CATS[a]||a).localeCompare(CATS[b]||b));
+  scopeSel.innerHTML = '<option value="all">All jobs</option><option value="applied">Applied jobs</option>'
+    + catsWithSkills.map(c => `<option value="cat:${c}">${esc(CATS[c] || c)}</option>`).join("");
+  scopeSel.onchange = () => renderSkillView(scopeSel.value);
+  $("skEdit").onclick = editKnownSkills;
+  renderSkillView("all");
+}
+
+function skillsForScope(scope) {
+  const s = _stats; if (!s) return [];
+  if (scope === "applied") return s.skills.applied || [];
+  if (scope.startsWith("cat:")) return (s.skills.by_category || {})[scope.slice(4)] || [];
+  return s.skills.all || [];
+}
+
+function renderSkillView(scope) {
+  const s = _stats;
+  const list = skillsForScope(scope);
+  const known = new Set((s.known_skills || []).map(x => x.toLowerCase()));
+  const have = list.filter(x => known.has(x.skill.toLowerCase()));
+  const miss = list.filter(x => !known.has(x.skill.toLowerCase()));
+  const col = (title, items, cls, empty) => `
+    <div class="skcol">
+      <div class="skhead ${cls}">${title} <span class="n">${items.length}</span></div>
+      ${items.length ? items.slice(0,20).map(x =>
+        `<div class="skrow"><span class="nm">${esc(x.skill)}</span><span class="ct">${x.count}</span></div>`).join("")
+        : `<div class="hint" style="padding:6px 2px">${empty}</div>`}
+    </div>`;
+  const scopeName = scope==='all'?'all jobs':scope==='applied'?'applied jobs':esc(CATS[scope.slice(4)]||scope.slice(4));
+  $("skView").innerHTML = `
+    <div class="hint" style="margin-bottom:10px">
+      ${list.length} distinct tools in <b>${scopeName}</b>
+      · you have <b style="color:var(--green)">${have.length}</b>, missing <b style="color:var(--amber)">${miss.length}</b>
+      ${s.known_skills && s.known_skills.length ? '' : ' · <i>add your skills to see this split →</i>'}
+    </div>
+    <div class="skgrid">
+      ${col("In your toolkit", have, "have", "none of these are in your skills yet")}
+      ${col("Worth learning (missing)", miss, "miss", "you already have everything here")}
+    </div>`;
+}
+
+async function editKnownSkills() {
+  const cur = (_stats?.known_skills || []).join(", ");
+  const next = prompt("Your skills / tools (comma-separated) — used for the have-vs-missing split:", cur);
+  if (next === null) return;
+  const arr = [...new Set(next.split(",").map(x => x.trim()).filter(Boolean))];
+  try {
+    await apiCall("/meta/known_skills", { method: "PUT", body: JSON.stringify({ value: JSON.stringify(arr) }) });
+    _stats.known_skills = arr;
+    toast("Skills saved");
+    renderSkillView($("skScope").value);
+  } catch (e) { toast(e.message); }
 }
 
 /* ── activity ───────────────────────────────────────────────────────────── */

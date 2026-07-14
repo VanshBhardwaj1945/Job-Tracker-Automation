@@ -766,8 +766,8 @@ api.get("/stats", async (c) => {
                 FROM jobs GROUP BY company ORDER BY applied DESC, n DESC LIMIT 20`)
       .bind(...APPLIED_PLUS)
       .all<{ company: string; n: number; applied: number }>(),
-    db.prepare("SELECT skills, phase FROM jobs WHERE skills != '[]'")
-      .all<{ skills: string; phase: string }>(),
+    db.prepare("SELECT skills, phase, category FROM jobs WHERE skills != '[]'")
+      .all<{ skills: string; phase: string; category: string }>(),
     db.prepare(`SELECT COALESCE(match_score, -1) AS s, COUNT(*) AS n
                 FROM jobs GROUP BY s ORDER BY s`)
       .all<{ s: number; n: number }>(),
@@ -792,20 +792,34 @@ api.get("/stats", async (c) => {
     ).first<{ days_to_rejection: number | null; days_to_interview: number | null }>(),
   ]);
 
-  // Skills frequency: everywhere vs in jobs actually applied to (project-idea signal).
+  // Skills/buzzword frequency: everywhere, in applied jobs, and per category —
+  // the "what tools show up where" signal (and, vs your own skills, what to learn).
   const all = new Map<string, number>();
   const applied = new Map<string, number>();
+  const byCat: Record<string, Map<string, number>> = {};
   for (const row of skillRows.results) {
     let skills: string[] = [];
     try { skills = JSON.parse(row.skills); } catch { /* ignore bad rows */ }
+    const cat = row.category || "other";
+    (byCat[cat] ??= new Map());
     for (const s of skills) {
       all.set(s, (all.get(s) ?? 0) + 1);
+      byCat[cat].set(s, (byCat[cat].get(s) ?? 0) + 1);
       if (APPLIED_PLUS.includes(row.phase)) applied.set(s, (applied.get(s) ?? 0) + 1);
     }
   }
   const top = (m: Map<string, number>, n: number) =>
     [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n)
       .map(([skill, count]) => ({ skill, count }));
+  const by_category: Record<string, { skill: string; count: number }[]> = {};
+  for (const [cat, m] of Object.entries(byCat)) by_category[cat] = top(m, 30);
+
+  // The candidate's own skills (meta known_skills, JSON array) → drives the
+  // "tools you have vs are missing" view. Empty is fine (everything shows as "missing").
+  const ksRow = await db.prepare("SELECT value FROM meta WHERE key = 'known_skills'")
+    .first<{ value: string }>();
+  let known_skills: string[] = [];
+  try { known_skills = JSON.parse(ksRow?.value || "[]"); } catch { /* ignore */ }
 
   // ── Claude token usage / spend / cache effectiveness ──
   type URow = {
@@ -856,7 +870,8 @@ api.get("/stats", async (c) => {
     companies: companies.results,
     sources: sources.results,
     locations: locations.results,
-    skills: { all: top(all, 25), applied: top(applied, 25) },
+    skills: { all: top(all, 25), applied: top(applied, 25), by_category },
+    known_skills,
     match_histogram: matchHist.results,
     timings: {
       days_to_rejection: timings?.days_to_rejection ?? null,

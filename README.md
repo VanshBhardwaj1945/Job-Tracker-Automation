@@ -18,7 +18,7 @@ The dashboard (dark, Linear-inspired, installable as a PWA). Job/company data is
 
 <img src="docs/screenshots/dashboard-tracker.png" width="900" alt="Tracker">
 
-**Analytics** — pipeline funnel, category mix, the tools/keywords showing up in roles you chase, plus live Claude token spend and prompt-cache hit rate:
+**Analytics** — pipeline funnel, category mix, and a **tools & buzzwords** view you can scope by *all jobs / applied / any category*, split into what you **already have vs should learn** (missing) against your own skill list — plus live Claude token spend and prompt-cache hit rate:
 
 <img src="docs/screenshots/dashboard-analytics.png" width="900" alt="Analytics">
 
