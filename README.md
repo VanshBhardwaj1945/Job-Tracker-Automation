@@ -14,7 +14,7 @@
 
 The dashboard (dark, Linear-inspired, installable as a PWA). Job/company data is blurred for privacy.
 
-**Tracker** — every found role, **AI-matched on a 0–100 scale** and triaged into apply-now tiers (Top ≥85 / Recommended 70+ / ✨ For you 60+ / Take a look 50+), with an estimated **Pay** tier, tagged into a **multi-level category taxonomy** (a job can live in several categories at once). Star any role into **your own favorite buckets** ("Dream jobs", …). Filter with a **tri-state category tree**, a bucket viewer, and a **light/dark toggle**:
+**Tracker** — every found role, **AI-matched on a 0–100 scale** and triaged into apply-now tiers (Top ≥85 / Recommended 70+ / For you 60+ / Take a look 50+), with an estimated **Pay** tier, tagged into a **multi-level category taxonomy** (a job can live in several categories at once). Star any role into **your own favorite buckets** ("Dream jobs", …). Filter with a **tri-state category tree**, a bucket viewer, and a **light/dark toggle**:
 
 <img src="docs/screenshots/dashboard-tracker.png" width="900" alt="Tracker">
 
@@ -61,18 +61,18 @@ A production-shaped, serverless, AI-driven system — not a tutorial. Every piec
 ## How it works
 
 ```
-                 hourly                        every 2h
-  Job boards / ATS ─► Monitor ─► filter ─► AI score ─► Discord alert
-  (Greenhouse,        (GitHub     (intern?   (Haiku)        + push to
-   Lever, Ashby,       Actions)    US? cycle?)               the tracker
-   Workday, Simplify…)                                          │
-                                                                ▼
-  You (phone / laptop) ──► Cloudflare Access ──► Worker ──► D1 (jobs, events, usage)
-                            (verified JWT)         │         R2 (documents)
-                                                   ├─► match each job vs YOUR profile (Haiku)
-                                                   └─► generate resume / cover letter /
-                                                       interview prep / answers (Opus)
-  Gmail (IMAP) ──► Gmail watcher ──► classifies application emails ──► timeline + auto phase flip
+ hourly every 2h
+ Job boards / ATS ─► Monitor ─► filter ─► AI score ─► Discord alert
+ (Greenhouse, (GitHub (intern? (Haiku) + push to
+ Lever, Ashby, Actions) US? cycle?) the tracker
+ Workday, Simplify…) │
+ ▼
+ You (phone / laptop) ──► Cloudflare Access ──► Worker ──► D1 (jobs, events, usage)
+ (verified JWT) │ R2 (documents)
+ ├─► match each job vs YOUR profile (Haiku)
+ └─► generate resume / cover letter /
+ interview prep / answers (Opus)
+ Gmail (IMAP) ──► Gmail watcher ──► classifies application emails ──► timeline + auto phase flip
 ```
 
 ## How it targets what you want
@@ -82,13 +82,13 @@ companies and role types you're targeting** (each weighted by how much you want 
 keywords that describe your field, and a short summary of your background. From that:
 
 - **It watches your list directly** — every company you name is probed for its applicant-tracking
-  system and scraped at the source.
+ system and scraped at the source.
 - **It also casts a much wider net** — a crowd-sourced feed plus ATS discovery surface *extra*
-  roles from companies you never listed, so you don't miss something good just because it wasn't on
-  your radar.
+ roles from companies you never listed, so you don't miss something good just because it wasn't on
+ your radar.
 - **Then it weighs everything against you** — every posting is scored 0–10 against your profile and
-  ranked, so the best-fit roles float to the top and the noise sinks. Your weighted preferences
-  anchor the scoring; the AI does the judgment on each individual posting.
+ ranked, so the best-fit roles float to the top and the noise sinks. Your weighted preferences
+ anchor the scoring; the AI does the judgment on each individual posting.
 
 The result: you tell it your targets once, and it keeps finding both those *and* the ones you'd
 have wished you'd seen — already sorted by how well they fit you.
@@ -103,12 +103,12 @@ free & private). Override the model with `AI_MODEL`.
 **Any host.** Pick your budget and comfort level:
 
 - **Just the finder — free:** run the Python monitor on your laptop, in **Docker**,
-  on your **own server** (cron/systemd), or on **GitHub Actions** cron.
+ on your **own server** (cron/systemd), or on **GitHub Actions** cron.
 - **The full hosted dashboard:** Cloudflare Workers + D1 + R2 + Access via Terraform
-  is the one-command reference — but the tracker is a portable Hono app, and the docs
-  map every piece to **AWS / GCP / Azure / self-hosted** (compute, database, object
-  storage, auth). Try the whole thing locally first with `wrangler dev` (no cloud
-  account needed).
+ is the one-command reference — but the tracker is a portable Hono app, and the docs
+ map every piece to **AWS / GCP / Azure / self-hosted** (compute, database, object
+ storage, auth). Try the whole thing locally first with `wrangler dev` (no cloud
+ account needed).
 
 Full matrix and step-by-step: **[Set it up yourself](docs/SETUP.md)**.
 
@@ -145,17 +145,17 @@ strong first draft — **not to do the work for you**. A real, thoughtful applic
 always wins.
 
 - **Always review and edit AI-written resumes and cover letters before you send them.**
-  Treat every draft as a starting point, never a final submission.
+ Treat every draft as a starting point, never a final submission.
 - **Verify everything is accurate and authentic.** The AI works only from your real
-  materials and is instructed never to invent — but you are responsible for making sure
-  every claim is true and genuinely sounds like *you*.
+ materials and is instructed never to invent — but you are responsible for making sure
+ every claim is true and genuinely sounds like *you*.
 - **Do your own research on the company and role.** Personal, specific interest is what
-  gets interviews. Use the generated interview-prep as a jumping-off point, then go deeper
-  yourself. (Speaking from experience — this is what actually works.)
+ gets interviews. Use the generated interview-prep as a jumping-off point, then go deeper
+ yourself. (Speaking from experience — this is what actually works.)
 - **AI match scores are triage, not gospel** — they help you prioritize where to spend
-  your time, not decide for you.
+ your time, not decide for you.
 - You are responsible for everything you submit. Provided as-is under the MIT license,
-  with no warranty.
+ with no warranty.
 
 ---
 
