@@ -1,6 +1,6 @@
 # How I Built It — Job Tracker Automation
 
-<img src="architecture.png" width="1000" alt="Cloud architecture">
+<img src="cloud-architecture.png" width="1000" alt="Cloud architecture">
 
 > The deep-dive for anyone (recruiters, engineers, the curious) who wants to see
 > **every decision I made and why** — architecture, the security model, cost

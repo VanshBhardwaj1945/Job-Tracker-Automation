@@ -1,6 +1,6 @@
 # Job Tracker Automation
 
-<img src="docs/architecture.png" width="1000" alt="Cloud architecture">
+<img src="docs/cloud-architecture.png" width="1000" alt="Cloud architecture">
 
 > An end-to-end job-hunt automation platform: it **finds** relevant roles across the internet every hour, **scores** each one against your profile with an LLM, **tracks** everything you apply to, and **generates** tailored resumes, cover letters, and interview prep — all behind a private, single-page dashboard you can open from anywhere.
 
