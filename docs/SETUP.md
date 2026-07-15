@@ -187,6 +187,30 @@ These just work out of the box:
 - Matching uses a **mid-tier model** by default (`AI_MODEL` overrides it) — prompt
   caching keeps the cost low.
 
+## 7. LinkedIn via Apify (optional, OFF by default, bring your own token)
+
+LinkedIn has no open jobs API and scraping it sits in a ToS gray area, so this
+template ships **without** a LinkedIn feed. If you want one anyway, the clean
+pattern is a paid scraping Actor on [Apify](https://apify.com) run **once a
+day** (LinkedIn actors burn credit fast — never put one on an hourly loop):
+
+1. Create an Apify account and grab your API token (Settings → Integrations).
+   The free tier includes ~$5/month of credit.
+2. Pick a maintained **pay-per-result** LinkedIn *jobs* Actor from the Apify
+   Store (around $1 per 1,000 results; avoid monthly-rental actors unless you
+   need volume). Note its actor id and input schema — input shapes are not
+   standardized across actors.
+3. Add a small feed function next to the other sources: POST your searches to
+   `https://api.apify.com/v2/acts/<ACTOR_ID>/run-sync-get-dataset-items?token=<TOKEN>`,
+   map each item to the standard job dict (`company/title/location/url/description`),
+   return `[]` on any error (fail-open, like every other feed), and **cap the
+   rows** (e.g. 80/day keeps you inside the free credit).
+4. Gate it behind an env var (e.g. `LINKEDIN_DAILY=1`) that only your daily
+   cron sets, so the hourly monitor never touches Apify.
+
+Dedupe is already handled downstream (seen-jobs store + tracker id), so a daily
+LinkedIn sweep coexists fine with the hourly open-API feeds.
+
 ## Notes
 
 - **Fail-open by design:** no API key → keyword-only results; tracker down → the
