@@ -5,7 +5,7 @@ digest.py — Sunday-evening Discord digest + tracker housekeeping.
 1. Pipeline snapshot: applied this week, totals per phase, interview rate.
 2. Follow-up nudges: applied 14+ days ago with no response yet.
 3. Prep reminders: anything sitting in OA / interview.
-4. Top ⭐ recommended jobs still unapplied.
+4. Top recommended jobs still unapplied.
 5. Housekeeping: Found jobs untouched for 45+ days get auto-archived
    (they're almost certainly closed postings by then).
 
@@ -77,18 +77,18 @@ def run(dry_run: bool = False) -> None:
         f"({round(100 * interviews / applied_total) if applied_total else 0}% rate)",
     ]
     if in_play:
-        lines.append("\n**🧪 In play — prep for these:**")
+        lines.append("\n**In play — prep for these:**")
         lines += [f"· **{j['company']}** — {j['title']} ({j['phase']})" for j in in_play[:6]]
     if followups:
         lines.append(f"\n**⏰ No response in {FOLLOWUP_AFTER_DAYS}+ days — worth a follow-up:**")
         lines += [f"· **{j['company']}** — {j['title']} "
                   f"(applied {int(_days_ago(j.get('applied_at')))}d ago)" for j in followups[:8]]
     if recommended:
-        lines.append("\n**⭐ Top recommended you haven't applied to:**")
-        lines += [f"· **{j['company']}** — {j['title']} (🎯 {j.get('match_score', '?')}/100)"
+        lines.append("\n**Top recommended you haven't applied to:**")
+        lines += [f"· **{j['company']}** — {j['title']} ({j.get('match_score', '?')}/100)"
                   for j in recommended]
     if archived or stale_found:
-        lines.append(f"\n-# 🧹 auto-archived {archived if not dry_run else len(stale_found)} "
+        lines.append(f"\n-# auto-archived {archived if not dry_run else len(stale_found)} "
                      f"Found job(s) older than {ARCHIVE_FOUND_AFTER_DAYS}d")
     lines.append("-# jobs.example.com")
 
@@ -110,7 +110,7 @@ def run(dry_run: bool = False) -> None:
         log.info(f"batch unavailable — sync rematch queued {(res or {}).get('queued', 0)}")
     elif submitted.get("count"):
         log.info(f"submitted rematch batch {submitted.get('batch_id')} ({submitted['count']} jobs)")
-    notify.send_discord_event("📬 Weekly job-hunt digest", body, 0x6366F1)
+    notify.send_discord_event("Weekly job-hunt digest", body, 0x6366F1)
     log.info(f"Digest sent. followups={len(followups)} in_play={len(in_play)} archived={archived}")
 
 

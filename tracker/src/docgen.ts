@@ -49,7 +49,7 @@ async function githubSummary(env: Env): Promise<string> {
     const repos = (await res.json()) as Array<Record<string, any>>;
     const text = repos
       .filter((r) => !r.fork)
-      .map((r) => `- ${r.name} (${r.language ?? "?"}${r.stargazers_count ? `, ★${r.stargazers_count}` : ""}): ${r.description ?? ""}`)
+      .map((r) => `- ${r.name} (${r.language ?? "?"}${r.stargazers_count ? `, ${r.stargazers_count} stars` : ""}): ${r.description ?? ""}`)
       .join("\n");
     ghCache = { text, at: Date.now() };
     return text;

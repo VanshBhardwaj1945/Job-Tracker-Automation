@@ -421,17 +421,17 @@ def run_filter_check() -> bool:
     ok = True
     for title, loc in bad:
         if m.match(title, loc) not in (None, "other_swe"):
-            log.error(f"  ❌ SHOULD BLOCK: {title} ({loc})")
+            log.error(f"  SHOULD BLOCK: {title} ({loc})")
             ok = False
         else:
-            log.info(f"  ✓ blocked: {title}")
+            log.info(f"  blocked: {title}")
     for title, loc in good:
         if m.match(title, loc) in (None,):
-            log.error(f"  ❌ SHOULD PASS: {title} ({loc})")
+            log.error(f"  SHOULD PASS: {title} ({loc})")
             ok = False
         else:
-            log.info(f"  ✓ passes:  {title} → {m.match(title, loc)}")
-    log.info("✓ All filter checks passed" if ok else "⚠ FILTER BUGS — see above")
+            log.info(f"  passes:  {title} → {m.match(title, loc)}")
+    log.info("All filter checks passed" if ok else "FILTER BUGS — see above")
     return ok
 
 
@@ -453,9 +453,9 @@ def run_test():
     fake[1]["ai_score"], fake[1]["ai_reason"] = 8, "IAM matches profile"
     fake[2]["ai_score"], fake[2]["ai_reason"] = 7, "infra, relevant"
     notify.send_discord(fake)
-    notify.send_email(fake, subject="🧪 [TEST] Job Monitor — fake data, links go to example.com",
+    notify.send_email(fake, subject="[TEST] Job Monitor — fake data, links go to example.com",
                       html=notify.build_email_html(fake, title="[TEST] Fake data — not real postings"))
-    log.info("✓ Test complete. Check inbox/Discord.")
+    log.info("Test complete. Check inbox/Discord.")
 
 
 if __name__ == "__main__":

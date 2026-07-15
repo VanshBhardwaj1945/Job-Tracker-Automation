@@ -85,13 +85,13 @@ def main() -> int:
     if not tracker_client.set_meta("profile_resume", resume):
         print("ERROR: failed to sync resume to tracker")
         return 1
-    print(f"✓ profile_resume synced ({len(resume):,} chars)")
+    print(f"profile_resume synced ({len(resume):,} chars)")
 
     if not args.resume_only:
         block = extra_block()
         if block:
             if tracker_client.set_meta("profile_extra", block):
-                print(f"✓ profile_extra synced ({len(block):,} chars)")
+                print(f"profile_extra synced ({len(block):,} chars)")
             else:
                 print("WARN: extra sync failed (resume still synced)")
         else:
@@ -99,7 +99,7 @@ def main() -> int:
 
     res = tracker_client.rematch_all()
     if res:
-        print(f"✓ re-match queued for {res.get('queued', 0)} job(s)")
+        print(f"re-match queued for {res.get('queued', 0)} job(s)")
     else:
         print("WARN: rematch-all call failed (profile is synced; matches update on next inserts)")
     return 0

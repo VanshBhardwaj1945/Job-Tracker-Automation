@@ -760,7 +760,7 @@
   <div class="dlg-head">
     <h2 id="dTitle"></h2>
     <div class="spacer"></div>
-    <button onclick="detailDlg.close()">✕</button>
+    <button onclick="detailDlg.close()">×</button>
   </div>
   <div class="dlg-body" id="dBody"></div>
   <div class="dlg-foot">
@@ -777,7 +777,7 @@
   <div class="dlg-head">
     <h2>Add jobs</h2>
     <div class="spacer"></div>
-    <button onclick="addDlg.close()">✕</button>
+    <button onclick="addDlg.close()">×</button>
   </div>
   <div class="dlg-body">
     <div class="modes">
@@ -850,7 +850,7 @@
     <button id="rMd" title="Download the raw markdown (.md)">Download MD</button>
     <button id="rDocx" title="Download as an editable Word .docx in your resume format">Download DOCX</button>
     <button id="rSave">Save</button>
-    <button onclick="resumeDlg.close()">✕</button>
+    <button onclick="resumeDlg.close()">×</button>
   </div>
   <div class="dlg-body">
     <a id="rSrcToggle" class="out" style="display:none;font-size:11px;cursor:pointer">Customize resume source ▾</a>
@@ -874,7 +874,7 @@
     <h2 id="vTitle"></h2>
     <div class="spacer"></div>
     <button id="vCopy">⧉ Copy</button>
-    <button onclick="viewDlg.close()">✕</button>
+    <button onclick="viewDlg.close()">×</button>
   </div>
   <div class="dlg-body"><div id="vBody" class="body"></div></div>
 </dialog>
@@ -1111,7 +1111,7 @@ function paintBucketBtn() {
 // Popover on the toolbar star → pick which bucket's jobs to show.
 function openBucketView(anchor) {
   closeBucketMenu();
-  const opts = [["", "All jobs"], ["__any", "★ Any bucket"], ...state.buckets.map(b => [b, b])];
+  const opts = [["", "All jobs"], ["__any", "Any bucket"], ...state.buckets.map(b => [b, b])];
   const m = document.createElement("div");
   m.className = "bk-menu glass";
   m.innerHTML = `<div class="bk-head">Show bucket</div><div class="bk-list">`
@@ -1884,7 +1884,7 @@ async function runRematchAll() {
     try { r = await apiCall("/rematch-batch/collect", { method:"POST" }); } catch {}
     if (r && r.status === "ended") {
       prog.className = "prog done";
-      status.innerHTML = `Done — <b>${r.applied}</b> jobs re-scored ✓`;
+      status.innerHTML = `Done — <b>${r.applied}</b> jobs re-scored`;
       btn.disabled = false;
       toast(`Re-matched ${r.applied} jobs`);
       return;
@@ -1939,7 +1939,7 @@ async function runAction(key) {
         const ok = run.conclusion === "success";
         prog.className = "prog " + (ok ? "done" : "fail");
         status.innerHTML = ok
-          ? `Completed ✓ <a href="${esc(run.url)}" target="_blank" rel="noopener">run #${run.run_number} ↗</a>`
+          ? `Completed <a href="${esc(run.url)}" target="_blank" rel="noopener">run #${run.run_number} ↗</a>`
           : `<span style="color:var(--red)">Finished: ${esc(run.conclusion || "failed")}</span> <a href="${esc(run.url)}" target="_blank" rel="noopener">↗</a>`;
         btn.disabled = false;
         setTimeout(() => { if ($("page-activity").offsetParent !== null) loadActivity(); }, 3000);
@@ -2286,7 +2286,7 @@ async function loadArtifacts(id) {
       <span class="ev">${m.label}${size} · ${when}</span>
       <span class="spacer"></span>
       ${open}
-      <a class="out danger" data-del="${a.id}">✕</a>
+      <a class="out danger" data-del="${a.id}">×</a>
     </div>`;
   }).join("");
   el.querySelectorAll("[data-view]").forEach(a => a.onclick = () => viewDoc(a.dataset.view));

@@ -24,9 +24,9 @@ EMAIL_TO = os.environ.get("EMAIL_TO", "")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
 CATEGORY_META = {
-    "security":     ("🔐", "Security", "#b91c1c"),
-    "relevant_swe": ("⚙️", "Cloud / Infra / SRE", "#1d4ed8"),
-    "other_swe":    ("💻", "Other SWE", "#6b7280"),
+    "security":     ("Security", "#b91c1c"),
+    "relevant_swe": ("Cloud / Infra / SRE", "#1d4ed8"),
+    "other_swe":    ("Other SWE", "#6b7280"),
 }
 CATEGORY_ORDER = ["security", "relevant_swe", "other_swe"]
 
@@ -52,7 +52,7 @@ def _job_row(job):
       <td style="padding:12px 8px;border-bottom:1px solid #eee;vertical-align:top;">
         <strong style="font-size:14px;color:#111;">{job['company']}</strong> {badge}<br>
         <span style="color:#333;font-size:13px;">{job['title']}</span><br>
-        <span style="color:#888;font-size:12px;">📍 {job['location']}</span>
+        <span style="color:#888;font-size:12px;">{job['location']}</span>
         <span style="color:#bbb;font-size:10px;"> · via {job['source']}</span>{reason}
       </td>
       <td style="padding:12px 8px;border-bottom:1px solid #eee;text-align:right;
@@ -71,18 +71,18 @@ def build_email_html(jobs, title="New Internship Postings"):
     for cat in CATEGORY_ORDER:
         if not groups.get(cat):
             continue
-        emoji, label, color = CATEGORY_META[cat]
+        label, color = CATEGORY_META[cat]
         rows = "".join(_job_row(j) for j in groups[cat])
         sections += f"""
         <h3 style="margin:22px 0 6px;font-size:14px;color:{color};">
-          {emoji} {label} ({len(groups[cat])})</h3>
+          {label} ({len(groups[cat])})</h3>
         <table style="width:100%;border-collapse:collapse;border:1px solid #eee;">
           {rows}</table>"""
 
     return f"""<html><body style="font-family:Arial,sans-serif;max-width:620px;
                                    margin:0 auto;padding:20px;">
       <div style="background:#0a0a0a;color:white;padding:16px 20px;border-radius:8px;">
-        <h2 style="margin:0;font-size:18px;">🎯 {title}</h2>
+        <h2 style="margin:0;font-size:18px;">{title}</h2>
         <p style="margin:6px 0 0;font-size:12px;color:#aaa;">{run_time}</p>
       </div>
       {sections}
@@ -96,8 +96,8 @@ def send_email(jobs, subject=None, html=None):
         return
     n_sec = sum(1 for j in jobs if j.get("category") == "security")
     subject = subject or (
-        f"🔐 {n_sec} security + {len(jobs) - n_sec} SWE intern posting(s)"
-        if n_sec else f"⚙️ {len(jobs)} new intern posting(s)")
+        f"{n_sec} security + {len(jobs) - n_sec} SWE intern posting(s)"
+        if n_sec else f"{len(jobs)} new intern posting(s)")
     html = html or build_email_html(jobs)
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
@@ -108,7 +108,7 @@ def send_email(jobs, subject=None, html=None):
             msg["To"] = EMAIL_TO
             msg.attach(MIMEText(html, "html"))
             smtp.sendmail(EMAIL_SENDER, EMAIL_TO, msg.as_string())
-        log.info(f"✓ Email sent → {EMAIL_TO}")
+        log.info(f"Email sent → {EMAIL_TO}")
     except Exception as e:
         log.error(f"Email failed: {e}")
         raise
@@ -125,16 +125,16 @@ def send_discord(jobs):
     for cat in CATEGORY_ORDER:
         if not groups.get(cat):
             continue
-        emoji, label, color = CATEGORY_META[cat]
+        label, color = CATEGORY_META[cat]
         lines = []
         for j in groups[cat][:10]:
             score = f" `{j['ai_score']}/100`" if j.get("ai_score") is not None else ""
             lines.append(f"**[{j['company']}]({j['url']})** — {j['title']}{score}\n"
-                         f"-# 📍 {j['location']}")
+                         f"-# {j['location']}")
         if len(groups[cat]) > 10:
             lines.append(f"…and {len(groups[cat]) - 10} more (see email)")
         embeds.append({
-            "title": f"{emoji} {label} ({len(groups[cat])})",
+            "title": f"{label} ({len(groups[cat])})",
             "description": "\n".join(lines)[:4000],
             "color": int(color.lstrip("#"), 16),
         })
@@ -145,7 +145,7 @@ def send_discord(jobs):
             "embeds": embeds[:10],
         }, timeout=15)
         if r.status_code in (200, 204):
-            log.info("✓ Discord notification sent")
+            log.info("Discord notification sent")
         else:
             log.warning(f"Discord webhook returned {r.status_code}")
     except Exception as e:
@@ -183,14 +183,14 @@ def send_health_report(stats: dict):
         f"<td style='padding:4px 10px;text-align:right;'><b>{v}</b></td></tr>"
         for k, v in stats["summary"].items())
     failing = "".join(f"<li>{c} — {n} consecutive failures</li>"
-                      for c, n in stats["failing"][:20]) or "<li>none 🎉</li>"
+                      for c, n in stats["failing"][:20]) or "<li>none </li>"
     html = f"""<html><body style="font-family:Arial,sans-serif;max-width:620px;
                                    margin:0 auto;padding:20px;">
-      <h2>🩺 Job Monitor — Weekly Health Report</h2>
+      <h2>Job Monitor — Weekly Health Report</h2>
       <table style="border:1px solid #eee;border-collapse:collapse;">{rows}</table>
       <h3>Failing companies</h3><ul>{failing}</ul>
       <p style="color:#888;font-size:12px;">Failing companies are auto-reclassified
       on the next classify run. If total matches is 0 for a whole week, something
       upstream broke — check the Actions logs.</p>
     </body></html>"""
-    send_email([], subject="🩺 Job Monitor weekly health report", html=html)
+    send_email([], subject="Job Monitor weekly health report", html=html)

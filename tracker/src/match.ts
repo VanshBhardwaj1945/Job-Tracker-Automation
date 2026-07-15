@@ -16,7 +16,7 @@ const MODEL = "claude-sonnet-4-6";
 const BATCH = 6;
 
 // The candidate profile is stable for days, but rematches trickle in over hours
-// (per-row ♻️, weekly digest). The default 5-min cache expires between them; the
+// (per-row re-match, weekly digest). The default 5-min cache expires between them; the
 // 1-hour cache keeps the ~11k-token profile prefix warm across a whole session
 // of rematches/doc-gen. Needs the extended-cache beta header.
 export const EXTENDED_CACHE_HEADER = { "anthropic-beta": "extended-cache-ttl-2025-04-11" };

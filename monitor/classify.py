@@ -322,7 +322,7 @@ def run_classification(force=False, single_company=None):
         result = classify_company(company)
         if result:
             registry["companies"][company] = result
-            log.info(f"  ✓ {company} → {result['ats']}")
+            log.info(f"  {company} → {result['ats']}")
         else:
             needs_claude.append(company)
         time.sleep(0.15)
@@ -338,7 +338,7 @@ def run_classification(force=False, single_company=None):
                     registry["companies"][company] = entry(
                         "workday", tenant=tenant, wd=wdn, board=board,
                         probe_method="claude+probe")
-                    log.info(f"  ✓ {company} → workday (claude, verified)")
+                    log.info(f"  {company} → workday (claude, verified)")
                     continue
                 ats = "unknown"  # Claude's workday guess didn't verify
             registry["companies"][company] = entry(

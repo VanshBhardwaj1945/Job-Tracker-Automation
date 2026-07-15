@@ -67,11 +67,11 @@ JOB_EMAIL_RE = re.compile(
 
 VERDICTS = ("rejected", "interview", "offer", "oa", "update", "not_job")
 VERDICT_META = {
-    "rejected":  ("❌", 0xB91C1C, "Rejection"),
-    "interview": ("🎙", 0x22C55E, "Interview"),
-    "offer":     ("🏆", 0xF59E0B, "OFFER"),
-    "oa":        ("🧪", 0xA78BFA, "Online assessment / questionnaire"),
-    "update":    ("📬", 0x64748B, "Application update"),
+    "rejected":  (0xB91C1C, "Rejection"),
+    "interview": (0x22C55E, "Interview"),
+    "offer":     (0xF59E0B, "OFFER"),
+    "oa":        (0xA78BFA, "Online assessment / questionnaire"),
+    "update":    (0x64748B, "Application update"),
 }
 
 CLASSIFY_PROMPT = """You are triaging a job applicant's inbox. They are a cybersecurity student who \
@@ -312,13 +312,13 @@ def run(dry_run: bool = False) -> None:
             c["company"], c["verdict"], subject=c["subject"], detail=c["summary"])
         matched = (res or {}).get("matched")
         action = (res or {}).get("action", "tracker unreachable")
-        emoji, color, label = VERDICT_META[c["verdict"]]
-        title = f'{emoji} {label} — {c["company"]}'
-        lines = [f'**{c["summary"]}**', f'-# ✉️ {c["subject"][:150]}']
+        color, label = VERDICT_META[c["verdict"]]
+        title = f'{label} — {c["company"]}'
+        lines = [f'**{c["summary"]}**', f'-# {c["subject"][:150]}']
         if matched:
             lines.append(f'-# tracker: {matched["title"]} → {action}')
         else:
-            lines.append("-# ⚠️ no matching job in tracker")
+            lines.append("-# no matching job in tracker")
         notify.send_discord_event(title, "\n".join(lines), color)
 
     tracker_client.set_meta("gmail_uid", str(seen_uid))
