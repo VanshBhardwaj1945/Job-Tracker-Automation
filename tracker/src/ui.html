@@ -55,6 +55,7 @@
     --codebg: rgba(255,255,255,.06);
     --reason: #86d1a2; /* match-reason accent text */
     --title-c: #c4cad6; /* job-title cell (softer than pure text in dark) */
+    --bbar: rgba(10,13,20,.92); /* phone bottom tab bar (theme-aware) */
     color-scheme: dark;
   }
   /* ── Light mode: soft off-white (not glaring), same layout + accent ────────── */
@@ -71,6 +72,7 @@
     --title-c: #1a1e25;
     --accent: #5560cf; --accent2: #4a55c4; --accent-soft: rgba(85,96,207,.10);
     --green: #1f9d63; --amber: #b7841c; --red: #d23b3b;
+    --bbar: rgba(250,250,252,.94);
     --shadow-sm: 0 1px 2px rgba(15,20,30,.06);
     --shadow: 0 4px 16px rgba(15,20,30,.09);
     --shadow-lg: 0 16px 48px rgba(15,20,30,.16);
@@ -293,7 +295,11 @@
   .tab.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px rgba(94,106,210,.28); }
   .tab.active .n { opacity: .85; color: var(--accent2); }
   .tab .n { font-size: 10.5px; opacity: .6; margin-left: 5px; }
-  .filters { display: flex; gap: 8px; align-items: center; margin: 14px 0; flex-wrap: wrap; }
+  /* z-index 45: the riseIn animation (fill:both) makes .filters and .tablecard
+     sibling stacking contexts, so without this the msel dropdown paints UNDER
+     the table (DOM order). Keep above the table, below dialogs/toast. */
+  .filters { display: flex; gap: 8px; align-items: center; margin: 14px 0; flex-wrap: wrap;
+             position: relative; z-index: 45; }
   #search { width: 220px; }
 
   .tablecard { padding: 6px 14px 10px; overflow-x: auto; }
@@ -369,6 +375,14 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; }
   /* dashboard customizer */
   .dashbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  /* analytics section headers — quiet labels that group the panel grids */
+  .sechead { display: flex; align-items: baseline; gap: 10px; margin: 26px 2px 10px; }
+  .sechead:first-of-type { margin-top: 8px; }
+  .sechead h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .08em;
+                text-transform: uppercase; color: var(--muted); }
+  .sechead span { font-size: 11.5px; color: var(--dim); }
+  .sechead::after { content: ""; flex: 1; height: 1px; background: var(--hairline); align-self: center; }
+  #page-analytics .grid.dash { margin-bottom: 4px; }
   .dashedit { display: inline-flex; align-items: center; gap: 7px; }
   .dashedit.on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
   .dash-hint { color: var(--dim); font-size: 11.5px; }
@@ -468,6 +482,13 @@
   .runrow .ev { color: var(--dim); font-size: 11px; }
   .runrow a { color: var(--muted); text-decoration: none; }
   .feed .runrow .name { min-width: 0; }
+  /* live progress bar under a just-dispatched run row */
+  .runrow.live { flex-wrap: wrap; }
+  .runprog { flex: 1 1 100%; height: 4px; margin-top: 7px; border-radius: 3px;
+             background: var(--surface3); overflow: hidden; }
+  .runprog .fill { height: 100%; width: 0; border-radius: 3px;
+                   background: linear-gradient(90deg, var(--accent), var(--accent2));
+                   transition: width 1s linear; }
 
   /* ── dialogs ────────────────────────────────────────────────────────────── */
   dialog {
@@ -560,58 +581,70 @@
     .hide-sm { display: none; }
   }
 
-  /* ── phone: bottom tab bar + card rows ──────────────────────────────────── */
+  /* ── phone: native-app look — bottom tab bar, floating job cards, sheets ── */
   @media (max-width: 740px) {
     html, body { overflow-x: hidden; }
     .shell { flex-direction: column; }
-    /* sidebar → fixed iOS-style bottom tab bar */
+    /* sidebar → fixed iOS-style bottom tab bar (theme-aware: --bbar) */
     aside {
       position: fixed; bottom: 0; left: 0; right: 0; top: auto; z-index: 20;
-      width: 100%; height: auto; flex-direction: row; gap: 0;
+      width: 100%; height: auto; flex-direction: row; align-items: center; gap: 2px;
       padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
       border-right: none; border-top: 1px solid var(--stroke);
-      background: rgba(10,13,20,.92);
+      background: var(--bbar);
       backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     }
     .logo, aside .foot { display: none; }
     .nav { flex: 1; flex-direction: column; gap: 3px; padding: 7px 4px;
            font-size: 10.5px; text-align: center; border-radius: 12px; }
     .nav .ic { width: auto; font-size: 19px; }
+    /* theme toggle → compact icon-only square in the tab bar */
+    .themebtn { margin: 0; width: 42px; height: 42px; flex: 0 0 42px; padding: 0;
+                justify-content: center; border-radius: 12px; }
+    .themebtn .tt-label { display: none; }
 
-    .content { padding: 14px 12px calc(96px + env(safe-area-inset-bottom)); }
-    .topbar { gap: 8px; }
+    .content { padding: 12px 12px calc(96px + env(safe-area-inset-bottom)); }
+    .topbar { gap: 8px; margin-bottom: 12px; }
     .topbar h1 { font-size: 17px; }
     .topbar .sub { display: none; }
     button { padding: 8px 12px; }
 
     /* iOS zooms any focused input under 16px — keep controls at 16px */
     input, select, textarea { font-size: 16px; }
-    .filters { gap: 6px; }
+    .filters { gap: 6px; margin: 10px 0; }
     .filters > input, .filters > select { flex: 1 1 130px; width: auto; min-width: 0; }
     #search { flex: 1 1 100%; }
+    .msel-panel { position: fixed; left: 12px; right: 12px; top: auto; min-width: 0;
+                  max-width: none; }
     .tabs { padding: 4px; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
     .tabs::-webkit-scrollbar { display: none; }
     .tab { padding: 6px 10px; font-size: 12.5px; }
 
-    /* table → stacked cards */
-    .tablecard { padding: 4px 12px 8px; overflow-x: hidden; }
+    /* table → floating cards (native list feel) */
+    .tablecard { padding: 0; overflow-x: hidden; background: none; border: none;
+                 box-shadow: none; }
     table, tbody { display: block; width: 100%; }
     thead { display: none; }
     tr.row {
-      display: grid; grid-template-columns: 1fr auto;
-      grid-template-areas: "co match" "title title" "phase link";
-      gap: 3px 10px; padding: 12px 2px;
-      border-bottom: 1px solid var(--hairline);
+      display: grid; grid-template-columns: 1fr auto auto;
+      grid-template-areas: "co co match" "title title title" "term term term"
+                           "phase star link";
+      gap: 4px 10px; padding: 13px 14px; margin: 0 0 10px;
+      background: var(--surface); border: 1px solid var(--stroke);
+      border-radius: 14px; box-shadow: var(--shadow-sm);
     }
-    tr.row:last-child { border-bottom: none; }
     td { display: block; border: none; padding: 0; }
     td:nth-child(1) { grid-area: co; font-size: 15px; }
     td:nth-child(2) { grid-area: title; }
+    /* term + bucket star are useful on phone — undo .hide-sm for them */
+    td:nth-child(6) { display: block; grid-area: term; font-size: 11.5px; color: var(--muted); }
+    td:nth-child(7) { display: block; grid-area: star; justify-self: end; align-self: center; }
     td:nth-child(4) { grid-area: match; justify-self: end; align-self: start; }
     td:nth-child(8) { grid-area: phase; justify-self: start; margin-top: 6px; }
-    td:nth-child(10) { grid-area: link; justify-self: end; align-self: end; }
+    td:nth-child(10) { grid-area: link; justify-self: end; align-self: center; }
     a.out { font-size: 19px; padding: 4px; }
     .reason { max-width: none; }
+    #empty { padding: 28px 10px; }
 
     /* analytics / activity */
     .kpis { grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -623,11 +656,21 @@
     .runrow .ev { display: none; }
     .hb { padding: 12px 13px; }
 
-    /* dialogs: single-column form, comfy spacing */
+    /* dialogs → full-width bottom sheets */
+    dialog {
+      width: 100vw; max-width: 100vw; margin: auto 0 0;
+      border-left: none; border-right: none; border-bottom: none;
+      border-radius: 16px 16px 0 0;
+      max-height: 94dvh;
+    }
+    .dlg-body { max-height: calc(94dvh - 122px); }
     .grid2 { grid-template-columns: 1fr; }
     .dlg-head, .dlg-body, .dlg-foot { padding-left: 14px; padding-right: 14px; }
-    .dlg-foot { flex-wrap: wrap; }
+    .dlg-foot { flex-wrap: wrap; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
     .modes { flex-wrap: wrap; }
+
+    /* toast sits above the tab bar, not under it */
+    #toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
   }
 </style>
 </head>
@@ -889,6 +932,7 @@ async function loadTaxonomy() {
 const TABS = [
   { key:"top", label:"Top applicant", tier:"top" },
   { key:"rec", label:"Recommended", tier:"rec" },
+  { key:"foryou", label:"For you", tier:"foryou" },
   { key:"look", label:"Take a look", tier:"look" },
   { key:"found", label:"Found", phases:"found" },
   { key:"applied", label:"Applied", phases:"applied" },
@@ -1183,7 +1227,8 @@ function renderRows() {
   const t = TABS.find(x => x.key === state.tab);
   $("empty").textContent = t?.tier
     ? ({top:"No top-tier matches right now — check Recommended.",
-        rec:"Nothing in Recommended — check Take a look.",
+        rec:"Nothing in Recommended — check For you.",
+        foryou:"Nothing in For you — check Take a look.",
         look:"Nothing here — the monitor keeps hunting hourly."})[t.tier]
     : "Nothing here yet.";
   tb.innerHTML = state.jobs.map(j => `
@@ -1395,16 +1440,23 @@ async function loadAnalytics() {
 
     <div class="dashbar">
       <button id="dashEditBtn" class="dashedit">${icon('grid')} Customize layout</button>
-      <span class="dash-hint" hidden>Drag panels to reorder · use the width buttons on each panel · saves automatically</span>
+      <span class="dash-hint" hidden>Drag panels to reorder within a section · width buttons on each panel · saves automatically</span>
       <div class="spacer"></div>
       <button id="dashReset" class="dash-reset" hidden>Reset</button>
     </div>
 
-    <div class="grid">
+    <div class="sechead"><h2>Pipeline</h2><span>how the search is moving</span></div>
+    <div class="grid dash">
       <div class="glass card" style="grid-column: 1 / -1">
         <h3>Applications per week</h3>
         ${areaSvg(weekly, 900, 160)}
       </div>
+      <div class="glass card"><h3>Pipeline funnel</h3>${bars(funnel, "label", "n")}</div>
+      <div class="glass card"><h3>Applications per month</h3>${areaSvg(monthly, 560, 140, "#22d3ee")}</div>
+    </div>
+
+    <div class="sechead"><h2>Fit &amp; focus</h2><span>what you're chasing, and how well it matches</span></div>
+    <div class="grid dash">
       <div class="glass card"><h3>Category mix</h3>
         <div class="donutwrap">
           ${donutSvg(catItems)}
@@ -1413,9 +1465,17 @@ async function loadAnalytics() {
           </div>
         </div>
       </div>
-      <div class="glass card"><h3>Pipeline funnel</h3>${bars(funnel, "label", "n")}</div>
       <div class="glass card"><h3>Applied by category</h3>${bars(catApplied, "label", "n", "alt")}</div>
+      <div class="glass card"><h3>Match score distribution</h3>${bars(hist, "label", "n")}</div>
+    </div>
+
+    <div class="sechead"><h2>Market</h2><span>what's out there and what it wants</span></div>
+    <div class="grid dash">
       <div class="glass card"><h3>Where jobs come from</h3>${bars(sources, "label", "n", "alt")}</div>
+      <div class="glass card"><h3>Top companies</h3>
+        ${bars(s.companies.map(x => ({label:x.company, n:x.n})), "label", "n", "alt")}</div>
+      <div class="glass card"><h3>Top locations</h3>
+        ${bars(s.locations.map(x => ({label:x.location, n:x.n})), "label", "n", "alt")}</div>
       <div class="glass card" style="grid-column: 1 / -1">
         <h3>Tools &amp; buzzwords
           <span class="sub">what shows up where — and, vs your toolkit, what you already have vs should learn</span></h3>
@@ -1425,12 +1485,10 @@ async function loadAnalytics() {
         </div>
         <div id="skView"></div>
       </div>
-      <div class="glass card"><h3>Top companies</h3>
-        ${bars(s.companies.map(x => ({label:x.company, n:x.n})), "label", "n", "alt")}</div>
-      <div class="glass card"><h3>Top locations</h3>
-        ${bars(s.locations.map(x => ({label:x.location, n:x.n})), "label", "n", "alt")}</div>
-      <div class="glass card"><h3>Match score distribution</h3>${bars(hist, "label", "n")}</div>
-      <div class="glass card"><h3>Applications per month</h3>${areaSvg(monthly, 560, 140, "#22d3ee")}</div>
+    </div>
+
+    <div class="sechead"><h2>System &amp; spend</h2><span>what the automation costs to run</span></div>
+    <div class="grid dash">
       <div class="glass card" style="grid-column: 1 / -1"><h3>Cost center
           <span class="sub">spend over time by provider — toggle any mix to spot spikes</span></h3>
         <div class="row2" id="costToggles" style="margin-bottom:10px; flex-wrap:wrap"></div>
@@ -1544,33 +1602,37 @@ const DASH_KEY = "dashLayoutV1";
 let dashEditing = false;
 function loadDash() { try { return JSON.parse(localStorage.getItem(DASH_KEY) || "{}"); } catch { return {}; } }
 function saveDash(d) { try { localStorage.setItem(DASH_KEY, JSON.stringify(d)); } catch {} }
-function dashGrid() { return document.querySelector("#page-analytics .grid"); }
+// Panels live in per-section grids (.grid.dash) — layout applies within each section.
+function dashGrids() { return [...document.querySelectorAll("#page-analytics .grid.dash")]; }
+function dashCards() { return dashGrids().flatMap(g => [...g.children]); }
 function panelId(card) {
   const h = card.querySelector("h3"); const t = (h ? h.textContent : card.textContent) || "";
   return t.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40);
 }
 function applyDash() {
-  const grid = dashGrid(); if (!grid) return;
+  const grids = dashGrids(); if (!grids.length) return;
   const d = loadDash(), span = d.span || {};
-  const cards = [...grid.children];
-  cards.forEach(c => {
-    c.dataset.panel = panelId(c);
-    c.dataset.defcol = c.style.gridColumn || "";       // template default (some are full-width)
-    const sp = span[c.dataset.panel];
-    c.style.gridColumn = sp ? (sp === "full" ? "1 / -1" : "span " + sp) : c.dataset.defcol;
-  });
   const order = Array.isArray(d.order) ? d.order : [];
-  const byId = Object.fromEntries(cards.map(c => [c.dataset.panel, c]));
-  const seq = [...order.filter(id => byId[id]), ...cards.map(c => c.dataset.panel).filter(id => !order.includes(id))];
-  seq.forEach(id => grid.appendChild(byId[id]));
+  for (const grid of grids) {
+    const cards = [...grid.children];
+    cards.forEach(c => {
+      c.dataset.panel = panelId(c);
+      c.dataset.defcol = c.style.gridColumn || "";     // template default (some are full-width)
+      const sp = span[c.dataset.panel];
+      c.style.gridColumn = sp ? (sp === "full" ? "1 / -1" : "span " + sp) : c.dataset.defcol;
+    });
+    const byId = Object.fromEntries(cards.map(c => [c.dataset.panel, c]));
+    const seq = [...order.filter(id => byId[id]),
+                 ...cards.map(c => c.dataset.panel).filter(id => !order.includes(id))];
+    seq.forEach(id => grid.appendChild(byId[id]));
+  }
 }
 function setSpan(card, w) {
   const d = loadDash(); d.span = d.span || {}; d.span[card.dataset.panel] = w; saveDash(d);
   card.style.gridColumn = w === "full" ? "1 / -1" : "span " + w;
 }
 function persistOrder() {
-  const grid = dashGrid(); if (!grid) return;
-  const d = loadDash(); d.order = [...grid.children].map(c => c.dataset.panel); saveDash(d);
+  const d = loadDash(); d.order = dashCards().map(c => c.dataset.panel); saveDash(d);
 }
 function setupPanel(card) {
   let ctrl = card.querySelector(".dash-ctrl");
@@ -1588,21 +1650,22 @@ function setupPanel(card) {
 }
 function toggleDashEdit() {
   dashEditing = !dashEditing;
-  const grid = dashGrid(); if (!grid) return;
-  grid.classList.toggle("editing", dashEditing);
+  const grids = dashGrids(); if (!grids.length) return;
+  grids.forEach(g => g.classList.toggle("editing", dashEditing));
   const btn = $("dashEditBtn");
   btn.classList.toggle("on", dashEditing);
   btn.innerHTML = dashEditing ? icon('check') + " Done" : icon('grid') + " Customize layout";
   document.querySelector(".dash-hint").hidden = !dashEditing;
   $("dashReset").hidden = !dashEditing;
-  [...grid.children].forEach(setupPanel);
+  dashCards().forEach(setupPanel);
 }
 function setupDashboard() {
-  const grid = dashGrid(); if (!grid) return;
+  const grids = dashGrids(); if (!grids.length) return;
   applyDash();
-  grid.ondragover = (e) => {
+  for (const grid of grids) grid.ondragover = (e) => {
     if (!dashEditing) return;
     e.preventDefault();
+    // drags stay inside their own section grid — reordering is per-section
     const dragging = grid.querySelector(".dragging"); if (!dragging) return;
     let closest = null, best = Infinity;
     grid.querySelectorAll(".card:not(.dragging)").forEach(c => {
@@ -1616,10 +1679,10 @@ function setupDashboard() {
   $("dashEditBtn").onclick = toggleDashEdit;
   $("dashReset").onclick = () => { saveDash({}); dashEditing = false; loadAnalytics(); };
   if (dashEditing) {           // preserve edit mode across re-renders
-    grid.classList.add("editing");
+    grids.forEach(g => g.classList.add("editing"));
     $("dashEditBtn").classList.add("on"); $("dashEditBtn").innerHTML = icon('check') + " Done";
     document.querySelector(".dash-hint").hidden = false; $("dashReset").hidden = false;
-    [...grid.children].forEach(setupPanel);
+    dashCards().forEach(setupPanel);
   }
 }
 
@@ -1737,21 +1800,6 @@ async function loadActivity() {
     </div>`;
   };
 
-  const runs = a.runs ? a.runs.map(r => {
-    const dot = r.status !== "completed" ? "busy" : r.conclusion === "success" ? "ok" : "bad";
-    const dur = r.started_at && r.updated_at
-      ? Math.max(1, Math.round((new Date(r.updated_at) - new Date(r.started_at)) / 1000)) + "s" : "";
-    return `<div class="runrow">
-      <span class="dot ${dot}"></span>
-      <span class="name">${esc(r.name)}</span>
-      <span class="ev">${esc(r.event)} · #${r.run_number}</span>
-      <span class="spacer"></span>
-      <span class="ev">${dur}</span>
-      <span class="date">${rel(r.started_at)}</span>
-      <a href="${esc(r.url)}" target="_blank" rel="noopener">↗</a>
-    </div>`;
-  }).join("") : `<div class="hint">Workflow runs unavailable: ${esc(a.runs_error || "unknown")}.</div>`;
-
   const feed = (a.events || []).map(e => `
     <div class="runrow">
       <span class="evi">${icon(EV_ICON[e.type] || "file")}</span>
@@ -1776,10 +1824,11 @@ async function loadActivity() {
     <div id="actPanelHost"></div>
     <div class="grid">
       <div class="glass card"><h3>Workflow runs
-        <span class="sub">straight from GitHub Actions</span></h3><div id="runsList">${runs}</div></div>
+        <span class="sub">straight from GitHub Actions</span></h3><div id="runsList"></div></div>
       <div class="glass card feed"><h3>Recent job events
         <span class="sub">creates, phase changes, email verdicts</span></h3>${feed}</div>
     </div>`;
+  renderRunsList(a);
 
   // Click a card → toggle its explain-and-run panel below the row.
   el.querySelectorAll(".hb[data-act]").forEach(card => card.onclick = () => {
@@ -1848,6 +1897,9 @@ async function runRematchAll() {
   setTimeout(tick, 15000);
 }
 
+// Typical wall-clock seconds per action — drives the live progress bar.
+const WF_EXPECTED = { monitor: 240, push: 320, gmail: 110, profile: 50 };
+
 async function runAction(key) {
   const m = ACT_META[key];
   const btn = $("actRun"), prog = $("actProg"), status = $("actStatus");
@@ -1863,6 +1915,11 @@ async function runAction(key) {
     prog.className = "prog fail"; status.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
     btn.disabled = false; return;
   }
+  // The dispatched run appears in the Workflow-runs list immediately (synthetic
+  // "queued" row until GitHub creates the real one) with a live progress bar.
+  window._liveRun = { wf: m.wf, action: key, dispatchedAt, expected: WF_EXPECTED[key] || 180 };
+  renderRunsList(window._activity || {});
+  startLiveProgress();
   // Poll the runs feed for this workflow's freshly-dispatched run until it finishes.
   const started = Date.now();
   const tick = async () => {
@@ -1876,6 +1933,9 @@ async function runAction(key) {
     } catch {}
     if (run) {
       if (run.status === "completed") {
+        window._liveRun = null;
+        stopLiveProgress();
+        $("runsList") && renderRunsList(window._activity);
         const ok = run.conclusion === "success";
         prog.className = "prog " + (ok ? "done" : "fail");
         status.innerHTML = ok
@@ -1887,7 +1947,8 @@ async function runAction(key) {
       }
       status.innerHTML = `Running… <span class="hint">#${run.run_number} · ${esc(run.status)}</span>`;
     }
-    if (Date.now() - started > 5 * 60 * 1000) {
+    if (Date.now() - started > 10 * 60 * 1000) {
+      window._liveRun = null; stopLiveProgress();
       status.innerHTML = "Still running — check the Workflow runs list below."; btn.disabled = false; return;
     }
     setTimeout(tick, 4000);
@@ -1895,22 +1956,57 @@ async function runAction(key) {
   setTimeout(tick, 3500);
 }
 
+// ── live progress bar plumbing ──────────────────────────────────────────────
+// Width = elapsed / expected duration, capped at 96% until the run actually
+// completes (never lie about being done). A 1s ticker animates it between
+// the 4s /activity polls without re-rendering the list.
+let _liveTimer = null;
+function liveProgressPct() {
+  const lr = window._liveRun; if (!lr) return 0;
+  return Math.min(96, ((Date.now() - lr.dispatchedAt) / 1000 / lr.expected) * 100);
+}
+function startLiveProgress() {
+  stopLiveProgress();
+  _liveTimer = setInterval(() => {
+    const el = document.querySelector('[data-liveprog] .fill');
+    if (!el || !window._liveRun) { stopLiveProgress(); return; }
+    el.style.width = liveProgressPct().toFixed(1) + "%";
+  }, 1000);
+}
+function stopLiveProgress() { if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; } }
+
+function runRowHtml(r, live) {
+  const dot = r.status !== "completed" ? "busy" : r.conclusion === "success" ? "ok" : "bad";
+  const dur = r.started_at && r.updated_at
+    ? Math.max(1, Math.round((new Date(r.updated_at) - new Date(r.started_at)) / 1000)) + "s" : "";
+  const bar = live
+    ? `<div class="runprog" data-liveprog><div class="fill" style="width:${liveProgressPct().toFixed(1)}%"></div></div>`
+    : "";
+  return `<div class="runrow ${live ? "live" : ""}">
+    <span class="dot ${dot}"></span>
+    <span class="name">${esc(r.name)}</span>
+    <span class="ev">${esc(r.event)} · ${r.run_number ? "#" + r.run_number : "queued"}</span>
+    <span class="spacer"></span>
+    <span class="ev">${dur}</span>
+    <span class="date">${rel(r.started_at)}</span>
+    ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">↗</a>` : ""}
+    ${bar}
+  </div>`;
+}
+
 function renderRunsList(a) {
   const host = $("runsList"); if (!host) return;
-  host.innerHTML = a.runs ? a.runs.map(r => {
-    const dot = r.status !== "completed" ? "busy" : r.conclusion === "success" ? "ok" : "bad";
-    const dur = r.started_at && r.updated_at
-      ? Math.max(1, Math.round((new Date(r.updated_at) - new Date(r.started_at)) / 1000)) + "s" : "";
-    return `<div class="runrow">
-      <span class="dot ${dot}"></span>
-      <span class="name">${esc(r.name)}</span>
-      <span class="ev">${esc(r.event)} · #${r.run_number}</span>
-      <span class="spacer"></span>
-      <span class="ev">${dur}</span>
-      <span class="date">${rel(r.started_at)}</span>
-      <a href="${esc(r.url)}" target="_blank" rel="noopener">↗</a>
-    </div>`;
-  }).join("") : `<div class="hint">Workflow runs unavailable: ${esc(a.runs_error || "unknown")}.</div>`;
+  const lr = window._liveRun;
+  const isLive = r => lr && r.name === lr.wf && r.event === "workflow_dispatch"
+    && new Date(r.started_at).getTime() >= lr.dispatchedAt - 20000 && r.status !== "completed";
+  let rows = a.runs ? a.runs.map(r => runRowHtml(r, isLive(r))).join("")
+    : `<div class="hint">Workflow runs unavailable: ${esc(a.runs_error || "unknown")}.</div>`;
+  // Dispatched but GitHub hasn't listed the run yet → synthetic queued row.
+  if (lr && !(a.runs || []).some(isLive)) {
+    rows = runRowHtml({ name: lr.wf, event: "workflow_dispatch", status: "queued",
+                        started_at: new Date(lr.dispatchedAt).toISOString() }, true) + rows;
+  }
+  host.innerHTML = rows;
 }
 
 /* ── detail ─────────────────────────────────────────────────────────────── */

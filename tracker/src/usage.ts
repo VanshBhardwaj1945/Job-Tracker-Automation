@@ -41,22 +41,22 @@ export async function logUsage(
 }
 
 /** Total estimated $ spent since an ISO timestamp (for the spend guardrail). */
-export async function costSince(db: D1Database, iso: string): Promise<number> {
+export async function costSince(db: D1Database, iso: string, endpointLike?: string): Promise<number> {
   const rows = await db
     .prepare(
       `SELECT model, SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens,
               SUM(cache_write_tokens) AS cache_write_tokens, SUM(cache_read_tokens) AS cache_read_tokens
-       FROM usage_log WHERE ts >= ? GROUP BY model`
+       FROM usage_log WHERE ts >= ? ${endpointLike ? "AND endpoint LIKE ?" : ""} GROUP BY model`
     )
-    .bind(iso)
+    .bind(...(endpointLike ? [iso, endpointLike] : [iso]))
     .all<{ model: string; input_tokens: number; output_tokens: number; cache_write_tokens: number; cache_read_tokens: number }>();
   return rows.results.reduce((s, r) => s + rowCost(r), 0);
 }
 
 /** Spend since UTC midnight today. */
-export function costToday(db: D1Database): Promise<number> {
+export function costToday(db: D1Database, endpointLike?: string): Promise<number> {
   const midnight = new Date().toISOString().slice(0, 10) + "T00:00:00.000Z";
-  return costSince(db, midnight);
+  return costSince(db, midnight, endpointLike);
 }
 
 /** Dollar cost of one usage row, using the model's price and cache multipliers. */

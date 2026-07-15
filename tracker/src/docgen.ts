@@ -236,7 +236,7 @@ export async function docChat(
   const capRow = await db.prepare("SELECT value FROM meta WHERE key = 'doc_daily_cap_usd'")
     .first<{ value: string }>();
   const cap = Number(capRow?.value) || DEFAULT_DAILY_CAP_USD;
-  const spentToday = await costToday(db);
+  const spentToday = await costToday(db, "doc_%");  // docs only — a big rematch shouldn't lock out resumes
   if (spentToday >= cap) {
     throw new Error(
       `Daily AI spend cap reached ($${spentToday.toFixed(2)} / $${cap.toFixed(2)}). ` +

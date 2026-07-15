@@ -90,7 +90,8 @@ const SORTS: Record<string, string> = {
 const TIER_WHERE: Record<string, string> = {
   top: "phase = 'found' AND match_score >= 85",
   rec: "phase = 'found' AND match_score BETWEEN 70 AND 84",
-  look: "phase = 'found' AND match_score BETWEEN 50 AND 69",
+  foryou: "phase = 'found' AND match_score BETWEEN 60 AND 69",
+  look: "phase = 'found' AND match_score BETWEEN 50 AND 59",
 };
 // legacy alias (digest uses recommended=1): rec-or-better
 const RECOMMENDED_WHERE = "phase = 'found' AND match_score >= 70";
@@ -167,8 +168,9 @@ api.get("/jobs", async (c) => {
     c.env.DB.prepare(`SELECT
         SUM(CASE WHEN ${TIER_WHERE.top} THEN 1 ELSE 0 END) AS top,
         SUM(CASE WHEN ${TIER_WHERE.rec} THEN 1 ELSE 0 END) AS rec,
+        SUM(CASE WHEN ${TIER_WHERE.foryou} THEN 1 ELSE 0 END) AS foryou,
         SUM(CASE WHEN ${TIER_WHERE.look} THEN 1 ELSE 0 END) AS look
-      FROM jobs`).first<{ top: number; rec: number; look: number }>(),
+      FROM jobs`).first<{ top: number; rec: number; foryou: number; look: number }>(),
     c.env.DB.prepare("SELECT DISTINCT term FROM jobs WHERE term != ''").all<{ term: string }>(),
   ]);
   const termSet = new Set<string>();
@@ -178,7 +180,7 @@ api.get("/jobs", async (c) => {
   return c.json({
     jobs: jobs.results,
     counts: Object.fromEntries(counts.results.map((r) => [r.phase, r.n])),
-    tiers: { top: rec?.top ?? 0, rec: rec?.rec ?? 0, look: rec?.look ?? 0 },
+    tiers: { top: rec?.top ?? 0, rec: rec?.rec ?? 0, foryou: rec?.foryou ?? 0, look: rec?.look ?? 0 },
     recommended: (rec?.top ?? 0) + (rec?.rec ?? 0),
     terms: [...termSet].sort(),
   });
