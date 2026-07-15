@@ -6,9 +6,9 @@ feeds it; the gmail watcher updates it; this worker serves the UI and API.
 
 ```
 monitor (hourly) ──► POST /api/jobs/bulk ──► phase "found"
- └─ AI match vs YOUR profile (background)
-UI ── paste URL/description ──► /api/import ──► extract + match → preview → save
-UI ── paste LinkedIn Applied page ──► /api/import-list ──► rows as "applied"
+                                             └─ AI match vs YOUR profile (background)
+UI  ── paste URL/description ──► /api/import ──► extract + match → preview → save
+UI  ── paste LinkedIn Applied page ──► /api/import-list ──► rows as "applied"
 gmail_watch (2h) ──► /api/email-event ──► timeline events; rejections auto-flip
 scripts/sync_profile.py ──► meta profile_resume + profile_extra ──► /api/rematch-all
 ```
@@ -16,17 +16,17 @@ scripts/sync_profile.py ──► meta profile_resume + profile_extra ──► 
 ## Views (Aurora-glass sidebar UI)
 
 - **Tracker** — Recommended (found + match ≥ 7) · Found · Applied · OA · Interview ·
- Offer · Rejected · All. Search, category filter, sort, star importance, inline phase
- dropdowns, detail modal (markdown description/requirements, match reason, skills chips,
- notes, event timeline, edit-everything form, re-match). CSV export in the topbar.
+  Offer · Rejected · All. Search, category filter, sort, star importance, inline phase
+  dropdowns, detail modal (markdown description/requirements, match reason, skills chips,
+  notes, event timeline, edit-everything form, re-match). CSV export in the topbar.
 - **Analytics** — KPI row (interview rate, avg days-to-response), applications/week +
- per-month area charts, category donut, pipeline funnel, sources, top companies,
- locations, match-score distribution, and tools & buzzwords from postings (split
- "applied" vs "everywhere" — project-idea signal).
+  per-month area charts, category donut, pipeline funnel, sources, top companies,
+  locations, match-score distribution, and tools & buzzwords from postings (split
+  "applied" vs "everywhere" — project-idea signal).
 - **Activity** — live GitHub Actions runs (needs `github_token` tfvar since the repo is
- private), heartbeat cards (monitor / tracker push / gmail watcher / profile sync), and
- the recent job-event feed. A Sunday digest workflow (`monitor/digest.py`) additionally
- sends follow-up nudges + auto-archives Found jobs stale 45+ days.
+  private), heartbeat cards (monitor / tracker push / gmail watcher / profile sync), and
+  the recent job-event feed. A Sunday digest workflow (`monitor/digest.py`) additionally
+  sends follow-up nudges + auto-archives Found jobs stale 45+ days.
 
 ## Phases & categories
 
@@ -65,21 +65,21 @@ JWKS + `aud` + `iss`) — email login for humans, service token for CI. `DEV_MOD
 ## Security posture
 
 - workers.dev disabled; the Access-protected custom domain is the only route, and the
- worker re-verifies every JWT itself (defense in depth).
+  worker re-verifies every JWT itself (defense in depth).
 - Only `http(s)` URLs are ever stored or rendered (`cleanUrl` on all write paths +
- `safeUrl` at render) — no `javascript:`/`data:` link injection.
+  `safeUrl` at render) — no `javascript:`/`data:` link injection.
 - CSP / `X-Frame-Options: DENY` / `nosniff` / `no-referrer` on every response.
 - `/api/import` fetches http(s) only; CSV export escapes + guards formula injection.
 - All SQL is parameterized; the gmail classifier prompt treats email bodies as
- untrusted data (prompt-injection hardened).
+  untrusted data (prompt-injection hardened).
 
 ## Dev & deploy
 
 ```bash
 npm install
-npm run dev # local worker + local D1, auth bypassed
-npm run check # tsc
-npm run build # esbuild → dist/worker.js (ui.html inlined)
+npm run dev        # local worker + local D1, auth bypassed
+npm run check      # tsc
+npm run build      # esbuild → dist/worker.js (ui.html inlined)
 
 # deploy (terraform state is local to the candidate's machine — CI validates, never applies)
 npm run build && terraform -chdir=../terraform apply
