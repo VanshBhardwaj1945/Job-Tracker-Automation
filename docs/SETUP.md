@@ -41,7 +41,7 @@ Edit `data/profile.json`:
 - `role_ranking` — the role types you want, each with a `weight` (10 = dream,
   5 = acceptable). This anchors the scoring.
 - `categories` — keyword lists for your priority buckets (retune freely).
-- `ai_scoring.min_score` — raise to 7 if you only want strong fits.
+- `ai_scoring.min_score` — raise to 70 if you only want strong fits (0-100 scale).
 
 Drop your resume in as `data/resume.md` (plain markdown — this is what tailored
 documents are generated from; nothing is ever invented).

@@ -16,5 +16,5 @@
     "relevant_swe": ["adjacent", "keywords", "cloud", "backend", "devops"]
   },
   "include_other_swe": false,
-  "ai_scoring": { "enabled": true, "model": "claude-haiku-4-5-20251001", "min_score": 5 }
+  "ai_scoring": { "enabled": true, "model": "claude-haiku-4-5-20251001", "min_score": 50 }
 }

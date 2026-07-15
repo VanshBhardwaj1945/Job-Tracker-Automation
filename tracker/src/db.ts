@@ -101,6 +101,11 @@ const MIGRATIONS: string[][] = [
   [
     `ALTER TABLE jobs ADD COLUMN bucket TEXT NOT NULL DEFAULT ''`,
   ],
+  // v9: ai_score (monitor pre-score) moves to 0-100 like match_score.
+  // Rescale legacy 0-10 rows once; new rows arrive 0-100 from ai_score.py.
+  [
+    `UPDATE jobs SET ai_score = ai_score * 10 WHERE ai_score IS NOT NULL AND ai_score <= 10`,
+  ],
 ];
 
 let migrated = false;

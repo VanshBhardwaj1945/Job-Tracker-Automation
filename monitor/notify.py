@@ -43,7 +43,7 @@ def _group(jobs):
 def _job_row(job):
     score = job.get("ai_score")
     badge = (f'<span style="background:#ecfdf5;color:#047857;border-radius:4px;'
-             f'padding:1px 6px;font-size:11px;font-weight:bold;">{score}/10</span> '
+             f'padding:1px 6px;font-size:11px;font-weight:bold;">{score}/100</span> '
              if score is not None else "")
     reason = (f'<br><span style="color:#059669;font-size:11px;">↳ {job["ai_reason"]}</span>'
               if job.get("ai_reason") else "")
@@ -128,7 +128,7 @@ def send_discord(jobs):
         emoji, label, color = CATEGORY_META[cat]
         lines = []
         for j in groups[cat][:10]:
-            score = f" `{j['ai_score']}/10`" if j.get("ai_score") is not None else ""
+            score = f" `{j['ai_score']}/100`" if j.get("ai_score") is not None else ""
             lines.append(f"**[{j['company']}]({j['url']})** — {j['title']}{score}\n"
                          f"-# 📍 {j['location']}")
         if len(groups[cat]) > 10:

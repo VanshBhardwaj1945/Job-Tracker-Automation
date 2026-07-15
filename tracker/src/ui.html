@@ -1125,7 +1125,7 @@ function matchHtml(j) {
   if (j.match_score != null) {
     return `<span class="match ${matchClass(j.match_score)}" title="AI match — ${esc(j.match_reason)}">${j.match_score}<small>/100</small></span>`;
   }
-  if (j.ai_score != null) return `<span class="match m-lo" title="Pre-score — ${esc(j.ai_reason)}">${j.ai_score * 10}<small>/100</small></span>`;
+  if (j.ai_score != null) return `<span class="match m-lo" title="Pre-score — ${esc(j.ai_reason)}">${j.ai_score}<small>/100</small></span>`;
   return `<span class="loc">—</span>`;
 }
 
@@ -2386,7 +2386,7 @@ function fillForm(d) {
   $("fDescription").value = d.description || ""; $("fRequirements").value = d.requirements || "";
   $("fErr").textContent = d._dupWarning || "";
   $("fMatchBox").innerHTML = d.match_score != null
-    ? `<div class="matchbox">${icon('target')} <b>${d.match_score}/10 match:</b> ${esc(d.match_reason || "")}</div>` : "";
+    ? `<div class="matchbox">${icon('target')} <b>${d.match_score}/100 match:</b> ${esc(d.match_reason || "")}</div>` : "";
   window._draftMatch = d.match_score != null
     ? { match_score: d.match_score, match_reason: d.match_reason, skills: d.skills || [] } : {};
   $("addStep1").hidden = true; $("addStep2").hidden = false;

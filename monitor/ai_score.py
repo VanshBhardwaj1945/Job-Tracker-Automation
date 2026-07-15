@@ -3,7 +3,7 @@
 ai_score.py — Claude relevance scoring.
 
 Keyword filters are the coarse net; Claude is the fine one. Each NEW job
-(post-keyword-filter, pre-email) is scored 0-10 against the candidate profile
+(post-keyword-filter, pre-email) is scored 0-100 against the candidate profile
 and re-categorized. Jobs under min_score are dropped; 'other_swe' jobs that
 Claude finds relevant (e.g. a generic SWE title on a security team) get promoted.
 
@@ -28,15 +28,16 @@ The candidate's role preferences, ranked (weight 10 = perfect target, 5 = accept
 {ranking}
 
 For EACH job below, return a relevance score and category. Anchor the score to the
-ranking above: a job matching a weight-10 role type should score 9-10, weight-8 → 7-8,
-weight-5 → 5-6, and anything outside the ranked list scores by profile fit (usually ≤4).
+ranking above: a job matching a weight-10 role type should score 85-100, weight-8 →
+70-84, weight-5 → 50-69, and anything outside the ranked list scores by profile fit
+(usually ≤40).
 
 Categories:
 - "security"     — any security/cyber/IAM/identity/detection role (top priority)
 - "relevant_swe" — cloud, DevOps, SRE, infrastructure, platform, backend, distributed systems
 - "other"        — everything else (frontend, mobile, product SWE, data, hardware, non-tech)
 
-Score 0-10 (10 = perfect fit). Penalize: non-US locations, PhD/MBA-only roles,
+Score 0-100 (100 = perfect fit) — same scale as the tracker's match score. Penalize: non-US locations, PhD/MBA-only roles,
 non-student programs, roles unrelated to the profile. A generic "Software Engineer
 Intern" on a security/infra/cloud team should be scored on the team, not the title.
 
@@ -44,7 +45,7 @@ Jobs:
 {jobs}
 
 Return ONLY a JSON array, one object per job, same order:
-[{{"i": 0, "score": 8, "category": "security", "reason": "max 8 words"}}]
+[{{"i": 0, "score": 78, "category": "security", "reason": "max 8 words"}}]
 No markdown, no explanation."""
 
 
@@ -59,7 +60,9 @@ def score_jobs(jobs: list, profile: dict) -> list:
                 or profile.get("include_other_swe")]
 
     model = cfg.get("model") or ai_client.default_model()
-    min_score = cfg.get("min_score", 5)
+    min_score = cfg.get("min_score", 50)
+    if min_score <= 10:  # legacy 0-10 config value — same cut line on the 0-100 scale
+        min_score *= 10
     summary = profile.get("candidate", {}).get("summary", "")
     ranking = "\n".join(
         f"  {r['weight']}/10 — {r['role']}"
@@ -90,7 +93,12 @@ def score_jobs(jobs: list, profile: dict) -> list:
 
         for i, job in enumerate(batch):
             res = results.get(i, {})
-            job["ai_score"] = res.get("score")
+            s = res.get("score")
+            if isinstance(s, (int, float)):
+                if s <= 10:  # model drifted back to the old 0-10 scale
+                    s *= 10
+                s = max(0, min(100, int(s)))
+            job["ai_score"] = s
             job["ai_reason"] = res.get("reason", "")
             ai_cat = res.get("category")
             if ai_cat in ("security", "relevant_swe"):

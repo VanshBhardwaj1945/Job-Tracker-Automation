@@ -85,7 +85,7 @@ def run(dry_run: bool = False) -> None:
                   f"(applied {int(_days_ago(j.get('applied_at')))}d ago)" for j in followups[:8]]
     if recommended:
         lines.append("\n**⭐ Top recommended you haven't applied to:**")
-        lines += [f"· **{j['company']}** — {j['title']} (🎯 {j.get('match_score', '?')}/10)"
+        lines += [f"· **{j['company']}** — {j['title']} (🎯 {j.get('match_score', '?')}/100)"
                   for j in recommended]
     if archived or stale_found:
         lines.append(f"\n-# 🧹 auto-archived {archived if not dry_run else len(stale_found)} "
