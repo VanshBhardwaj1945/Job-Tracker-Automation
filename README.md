@@ -14,9 +14,13 @@
 
 The dashboard (dark, Linear-inspired, installable as a PWA). Job/company data is blurred for privacy.
 
-**Tracker** — every found role, **AI-matched on a 0–100 scale** and triaged into apply-now tiers (Top ≥85 / Recommended ≥70 / Take a look ≥50), with an estimated **Pay** tier, tagged into a **multi-level category taxonomy** (a job can live in several categories at once). Star any role into **your own favorite buckets** ("Dream jobs", …). Filter with a **tri-state category tree**, a bucket viewer, and a **light/dark toggle**:
+**Tracker** — every found role, **AI-matched on a 0–100 scale** and triaged into apply-now tiers (Top ≥85 / Recommended 70+ / ✨ For you 60+ / Take a look 50+), with an estimated **Pay** tier, tagged into a **multi-level category taxonomy** (a job can live in several categories at once). Star any role into **your own favorite buckets** ("Dream jobs", …). Filter with a **tri-state category tree**, a bucket viewer, and a **light/dark toggle**:
 
 <img src="docs/screenshots/dashboard-tracker.png" width="900" alt="Tracker">
+
+**Job detail** — click any row for the full picture: the AI's match reasoning, a company blurb with an estimated pay tier, extracted skills, and the full description/requirements, plus per-job actions (re-match, edit, notes, tailored document generation):
+
+<img src="docs/screenshots/dashboard-job-detail.png" width="900" alt="Job detail">
 
 **Analytics** — a **deep-insights** panel that reads your *actual behaviour* (not just pipeline counts): fit quality of what you apply to, in-lane focus, pay you're targeting, follow-ups going stale, weekly momentum, conversion rates, and outcomes by lane. Plus a **tools & buzzwords** view scoped through a **hierarchical category tree** (have vs should-learn, auto-updated from your profile), a **cost center** (spend over time by provider), and a **drag-to-reorder / resizable dashboard** you can lay out however you want:
 
