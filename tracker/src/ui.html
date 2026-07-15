@@ -1713,6 +1713,8 @@ const ACT_META = {
     explain:"Reads new mail over IMAP, prefilters to plausible job senders, has the AI classify each one (rejected / interview / OA / offer / update), posts events to the tracker — a confident 'rejected' auto-flips that job's phase, everything else is logged for you to action — notifies your channel, and advances the IMAP checkpoint." },
   profile: { key:"profile", ico:"sync", name:"Profile sync", wf:"Profile Sync",
     explain:"Pushes your living profile (your resume, plus any extra context source) into the tracker's meta store. Every future AI match and full rematch reads it, so updating your resume and running this re-grounds all scoring on the current you." },
+  rematch: { key:"rematch", ico:"refresh", name:"Re-match all jobs", local:true,
+    explain:"Re-scores every active job against your current profile with the AI — 0-100 match, tiers, pay, and categories. Runs as a Message Batch (cheaper + reliable), so it takes a few minutes; this panel tracks it to completion. Use it after syncing your profile or tuning the rubric." },
 };
 
 async function loadActivity() {
@@ -1728,7 +1730,7 @@ async function loadActivity() {
     return `<div class="glass hb clickable" data-act="${key}">
       <div class="ic">${icon(m.ico)}</div>
       <div class="t"><b>${m.name}</b>
-        <div class="when">${obj?.ts ? rel(obj.ts) : "no heartbeat yet"}</div>
+        <div class="when">${obj?.ts ? rel(obj.ts) : (m.local ? "on demand" : "no heartbeat yet")}</div>
         <div class="meta2">${extra}</div>
       </div>
       <span class="chev">${icon("chev")}</span>
@@ -1769,6 +1771,7 @@ async function loadActivity() {
           gm ? `${gm.emails} email(s) scanned · ${gm.events} event(s)` : "runs every 2h on Actions")}
       ${hbCard("profile", prof,
           prof ? `${(prof.chars || 0).toLocaleString()} chars (${esc(prof.key || "")})` : "not synced yet")}
+      ${hbCard("rematch", null, "re-score every job with the AI")}
     </div>
     <div id="actPanelHost"></div>
     <div class="grid">
@@ -1791,8 +1794,12 @@ async function loadActivity() {
 
 function renderActPanel(key) {
   const m = ACT_META[key], a = window._activity || {};
-  const can = a.can_dispatch;
+  const can = m.local ? true : a.can_dispatch; // local actions (rematch) don't need a GitHub token
   const host = $("actPanelHost");
+  const statusText = m.local
+    ? "Re-scores every active job — takes a few minutes; you can leave this open."
+    : (can ? "Triggers the <b>" + esc(m.wf) + "</b> workflow on GitHub Actions."
+           : "Read-only: add a fine-grained PAT with <b>Actions: Read and write</b> as the <code>github_token</code> terraform var to enable one-click runs.");
   host.innerHTML = `
     <div class="glass actpanel"><div class="inner">
       <h4>${icon(m.ico)} ${esc(m.name)}</h4>
@@ -1800,13 +1807,45 @@ function renderActPanel(key) {
       <div class="runbar">
         <button class="primary" id="actRun" ${can ? "" : "disabled"}>${icon("zap")}Run now</button>
         <div class="prog" id="actProg" hidden><div class="fill"></div></div>
-        <span class="rstatus" id="actStatus">${can
-          ? "Triggers the <b>" + esc(m.wf) + "</b> workflow on GitHub Actions."
-          : "Read-only: add a fine-grained PAT with <b>Actions: Read and write</b> as the <code>github_token</code> terraform var to enable one-click runs."}</span>
+        <span class="rstatus" id="actStatus">${statusText}</span>
       </div>
     </div></div>`;
   const btn = $("actRun");
-  if (btn && can) btn.onclick = () => runAction(key);
+  if (btn && can) btn.onclick = () => (m.local ? runRematchAll() : runAction(key));
+}
+
+// Re-match all jobs: submit a Message Batch, then poll collect until it lands.
+async function runRematchAll() {
+  const btn = $("actRun"), prog = $("actProg"), status = $("actStatus");
+  btn.disabled = true; prog.hidden = false; prog.className = "prog run";
+  status.innerHTML = "Submitting batch…";
+  let total = 0;
+  try {
+    const res = await apiCall("/rematch-batch?all=1&cap=300", { method:"POST" });
+    total = res.count || 0;
+    if (!total) { prog.className = "prog done"; status.textContent = "Nothing to re-match."; btn.disabled = false; return; }
+    status.innerHTML = `Re-scoring <b>${total}</b> jobs… <span class="hint">this runs in the background (~a few min)</span>`;
+  } catch (e) {
+    prog.className = "prog fail"; status.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
+    btn.disabled = false; return;
+  }
+  const started = Date.now();
+  const tick = async () => {
+    let r = null;
+    try { r = await apiCall("/rematch-batch/collect", { method:"POST" }); } catch {}
+    if (r && r.status === "ended") {
+      prog.className = "prog done";
+      status.innerHTML = `Done — <b>${r.applied}</b> jobs re-scored ✓`;
+      btn.disabled = false;
+      toast(`Re-matched ${r.applied} jobs`);
+      return;
+    }
+    const mins = Math.floor((Date.now() - started) / 60000);
+    status.innerHTML = `Re-scoring <b>${total}</b> jobs… <span class="hint">${mins}m elapsed · still processing</span>`;
+    if (Date.now() - started > 25 * 60 * 1000) { status.innerHTML = "Still processing — check back and hit Run again to collect."; btn.disabled = false; return; }
+    setTimeout(tick, 20000);
+  };
+  setTimeout(tick, 15000);
 }
 
 async function runAction(key) {

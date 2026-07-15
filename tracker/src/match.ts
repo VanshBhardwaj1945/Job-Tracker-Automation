@@ -128,22 +128,27 @@ full profile (master resume + their portfolio assistant's knowledge base):
 </candidate_profile>
 
 For EACH job the user sends, return:
-- "match_score": 0-100 — how strong a fit THIS candidate is. BE HARSH; use the FULL range.
-  Scores triage into three tiers by how squarely the role sits in the candidate's actual LANE
-  (their specialties, as evidenced by their real projects, certs, and skills above):
-  · 85-100 = TOP APPLICANT — squarely in-lane; the role's core day-to-day matches a majority of
-    their real projects/certs/skills, right level (intern/new-grad), workable location/term.
-    95+ is rare and tailor-made (≤ ~1 in 25); reserve 85 for a clearly in-lane role.
+- "match_score": 0-100 — how strong a fit THIS candidate is. Be discerning, but remember these
+  are INTERNSHIP / new-grad roles: the bar to be a genuinely strong applicant is lower than for
+  a senior hire, so DON'T be stingy at the top when the candidate truly fits their lane. Scores
+  triage into three tiers by how squarely the role sits in the candidate's actual LANE (their
+  specialties, per their real projects, certs, and skills above):
+  · 85-100 = TOP APPLICANT — squarely in-lane; the role's core work matches a majority of their
+    real projects/certs/skills, at the right level. A genuine in-lane role with real overlap
+    EARNS 85-92; reserve 93+ for a tailor-made fit at a strong brand.
   · 70-84 = RECOMMENDED — adjacent, kinda in their lane; a related domain, or an infra/platform/
-    backend role where their specialty is an EXPLICIT part of the mission.
+    backend role where their specialty is an EXPLICIT part of the mission. A solid intern fit.
   · 50-69 = TAKE A LOOK — generic overlap (shared tools/cloud/languages) with no real in-lane
-    angle, or a tangential/unclear posting. Worth a glance, not a priority.
-  · 0-49 = wrong domain, wrong level, wrong location, or no meaningful overlap.
-  HARD CAPS (be strict): generic roles with no EXPLICIT in-lane signal cap at 65 no matter the
-  brand or tech overlap; frontend/mobile/product-web/hardware ≤ 35; unclear-if-intern,
-  non-early-career, or title-only (no description) ≤ 50 — uncertainty is NEVER a reason to
-  score high. Only genuinely in-lane roles that match their projects/certs reach 85+. Expect
-  most jobs in a batch to land 30-65, with 85+ genuinely rare.
+    angle, or a tangential/unclear posting. Worth a glance.
+  · 0-49 = wrong domain, wrong level, or no meaningful overlap.
+  HARD CAPS (still hold the line on generic roles): generic roles with no EXPLICIT in-lane
+  signal cap at ~65 no matter the brand or tech overlap; frontend/mobile/product-web/hardware
+  ≤ 35; title-only (no description) ≤ 55 — uncertainty is not a reason to score high. Only
+  genuinely in-lane roles matching their projects/certs reach 85+. Expect a healthy handful of
+  in-lane roles at 85+, with most jobs landing 35-70.
+- Respect any logistics stated in the candidate's profile (location/relocation, work
+  authorization, clearance eligibility). Do NOT invent blockers the profile doesn't state, and
+  don't penalize a role for a requirement the candidate already meets or is willing to meet.
 - "match_reason": ≤ 25 words, second person, concrete — point at the specific experience or
   project of theirs that maps to this role. If it's a weak fit, say why in the same style.
 - "skills": the concrete tools/technologies/frameworks/buzzwords the POSTING names
