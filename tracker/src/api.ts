@@ -75,9 +75,12 @@ interface JobRow {
 }
 
 const SORTS: Record<string, string> = {
-  // triage order: best personal match first, AI score as fallback signal
-  rank: `COALESCE(match_score, -1) DESC, COALESCE(ai_score, -1) DESC,
-         updated_at DESC`,
+  // triage order: blended fit — match dominates (70%), pay tier (1-10, x10 to
+  // the 0-100 scale, 30%) pulls its weight: match 70/pay 7 beats match 80/pay 4.
+  // Unmatched rows always sink below matched ones.
+  rank: `(match_score IS NULL) ASC, (COALESCE(match_score, 0) * 0.7 + COALESCE(likeability, 0) * 3.0) DESC, COALESCE(ai_score, -1) DESC, updated_at DESC`,
+  match: `COALESCE(match_score, -1) DESC, COALESCE(ai_score, -1) DESC, updated_at DESC`,
+  pay: `COALESCE(likeability, -1) DESC, COALESCE(match_score, -1) DESC, updated_at DESC`,
   updated: "updated_at DESC",
   created: "created_at DESC",
   applied: "applied_at DESC NULLS LAST",
