@@ -123,11 +123,19 @@ net. Key decisions:
   posting, extracting structured fields from a page, classifying emails) uses
   **Claude Haiku** — fast and cheap. The rare, high-value work (generating a
   tailored resume or cover letter) uses **Claude Opus**.
-- **Profile-aware matching.** Every job is scored 0–10 against the user's synced
-  profile with a calibrated, deliberately harsh rubric (a tracker where
-  everything is a 9 is useless). The model also extracts the concrete
-  tools/keywords each posting names — aggregated later into "what should I learn
-  / build" signal.
+- **Profile-aware matching.** Every job is scored **0–100** against the user's
+  synced profile with a calibrated, deliberately harsh, lane-based rubric (a
+  tracker where everything is a 90 is useless) — the score triages into three
+  apply-now tiers. The model also estimates a **pay tier** and extracts the
+  concrete tools/keywords each posting names (aggregated into "what should I learn
+  / build" signal). Matching runs on a **mid-tier model (Sonnet)** for sharper
+  judgment; prompt caching keeps its cost close to the entry tier.
+- **Behaviour-driven analytics.** Beyond pipeline counts, the dashboard mines the
+  user's own *application history* to answer the questions that actually change a
+  job hunt: is the fit quality of what you apply to trending up or down, are you
+  staying in your lane or drifting, which lane actually converts, what's going
+  stale and needs a follow-up, and is your weekly momentum holding. A tracker that
+  reflects your behaviour back at you, not just a list.
 - **Prompt caching.** The candidate profile (the big, stable part of every
   matching and document prompt) is sent as a cached prefix, so repeated calls
   pay ~10% for it instead of full price. Extended (1-hour) cache keeps it warm

@@ -11,6 +11,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Tracker">
+<script>
+  // apply saved theme before first paint (no flash-of-wrong-theme)
+  try {
+    var _t = localStorage.getItem("theme") || "dark";
+    if (_t === "light") document.documentElement.setAttribute("data-theme", "light");
+  } catch (e) {}
+</script>
 <style>
   /* ── Design system: near-black, layered surfaces (Radix-style role scale),
         sharp hairline borders, quiet grey type, one indigo accent ──────────── */
@@ -35,6 +42,46 @@
     --shadow: 0 4px 16px rgba(0,0,0,.35);
     --shadow-lg: 0 16px 48px rgba(0,0,0,.5);
     --tnum: "tnum" 1, "cv11" 1, "ss01" 1;
+    /* theme-adaptive surface decoration (overridden in light mode) */
+    --card-toplight: rgba(255,255,255,.022);
+    --card-edge: rgba(255,255,255,.06);
+    --card-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 2px rgba(0,0,0,.28), 0 8px 24px -18px rgba(0,0,0,.7);
+    --glow: radial-gradient(680px 320px at 50% -8%, rgba(124,138,255,.05), transparent 68%),
+            radial-gradient(100% 60% at 50% 0, rgba(255,255,255,.014), transparent 40%);
+    --scrollthumb: #2a2c30;
+    /* mellow AI-match band colors — muted, not loud (sage / lavender / gold / rose) */
+    --match-hi: #8bb6a4; --match-rec: #9a9fe0; --match-mid: #d3b877; --match-lo: #c99191;
+    --hairline: rgba(255,255,255,.055); /* row dividers */
+    --codebg: rgba(255,255,255,.06);
+    --reason: #86d1a2; /* match-reason accent text */
+    --title-c: #c4cad6; /* job-title cell (softer than pure text in dark) */
+    color-scheme: dark;
+  }
+  /* ── Light mode: soft off-white (not glaring), same layout + accent ────────── */
+  :root[data-theme="light"] {
+    --bg: #f5f6f8; --bg2: #eef0f3;
+    --surface: #ffffff; --surface2: #f6f7f9; --surface3: #eceef2;
+    --glass: rgba(0,0,0,.02); --glass2: #f6f7f9;
+    /* stronger, visible hairlines on white + darker greys for real contrast */
+    --stroke: rgba(15,23,38,.14); --stroke2: rgba(15,23,38,.20); --stroke3: rgba(15,23,38,.30);
+    --text: #14171c; --muted: #474d57; --dim: #5a616b;
+    --hairline: rgba(15,23,38,.11);
+    --codebg: rgba(15,23,38,.055);
+    --reason: #2f7d57;
+    --title-c: #1a1e25;
+    --accent: #5560cf; --accent2: #4a55c4; --accent-soft: rgba(85,96,207,.10);
+    --green: #1f9d63; --amber: #b7841c; --red: #d23b3b;
+    --shadow-sm: 0 1px 2px rgba(15,20,30,.06);
+    --shadow: 0 4px 16px rgba(15,20,30,.09);
+    --shadow-lg: 0 16px 48px rgba(15,20,30,.16);
+    --card-toplight: rgba(255,255,255,0);
+    --card-edge: rgba(255,255,255,.7);
+    --card-shadow: 0 1px 2px rgba(15,20,30,.05), 0 8px 22px -14px rgba(15,20,30,.16);
+    --glow: radial-gradient(720px 340px at 50% -10%, rgba(85,96,207,.07), transparent 70%);
+    --scrollthumb: #cfd3da;
+    /* darker mellow tones so they stay legible on the off-white surface */
+    --match-hi: #4f9c7c; --match-rec: #6b73c9; --match-mid: #a9821f; --match-lo: #c05b5b;
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -48,20 +95,34 @@
   .num, .kpi .num, td, th, .bar .val, .match, .n, .runrow .date, .artrow .ev { font-feature-settings: var(--tnum); }
   ::selection { background: rgba(94,106,210,.4); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: #2a2c30; border-radius: 6px; border: 3px solid var(--bg); }
-  ::-webkit-scrollbar-thumb:hover { background: #35383d; }
-  /* one faint top vignette — no aurora */
+  ::-webkit-scrollbar-thumb { background: var(--scrollthumb); border-radius: 6px; border: 3px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { filter: brightness(1.2); }
+  html { transition: background .25s var(--ease); }
+  body, .glass, button, input, select, textarea, .tab, .nav, .pill, aside {
+    transition: background-color .25s var(--ease), border-color .25s var(--ease), color .2s var(--ease);
+  }
+  /* one restrained top light — tight, cool, barely-there (theme-adaptive) */
   body::before {
-    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background: radial-gradient(1100px 560px at 50% -12%, rgba(94,106,210,.055), transparent 70%);
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: var(--glow);
   }
 
-  /* flat elevated surface — sharp 1px border, no blur/glow */
+  /* elevated surface — hairline border + a whisper of top-edge light so cards
+     read as "lit from above" (crafted depth, not a flat AI rectangle) */
   .glass {
-    background: var(--surface); border: 1px solid var(--stroke);
+    background:
+      linear-gradient(180deg, var(--card-toplight), transparent 62px),
+      var(--surface);
+    border: 1px solid var(--stroke);
     border-radius: var(--radius); position: relative;
+    box-shadow: var(--card-shadow);
   }
-  .glass::before { content: none; }
+  .glass::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    /* hairline top highlight that fades at the corners — the Linear/Vercel tell */
+    -webkit-mask: linear-gradient(#000, transparent 40%);
+            mask: linear-gradient(#000, transparent 40%);
+    box-shadow: inset 0 1px 0 var(--card-edge);
+  }
 
   /* ── polish: focus, motion, elevation, loading ─────────────────────────────── */
   :focus { outline: none; }
@@ -69,7 +130,18 @@
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   /* cards lift subtly on hover (analytics/activity) */
   .card, .kpi, .hb { transition: border-color .14s var(--ease), transform .14s var(--ease), box-shadow .14s var(--ease); }
-  .card:hover, .kpi:hover, .hb:hover { border-color: var(--stroke2); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+  .card:hover, .kpi:hover, .hb:hover { border-color: var(--stroke2); transform: translateY(-1px); box-shadow: var(--shadow); }
+  /* refined load-in: gentle staggered rise on page-level containers (not per-row,
+     so filtering never re-triggers it). Honors reduced-motion via the reset above. */
+  @keyframes riseIn { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+  .kpis > *, .grid > *, .tablecard, .tabs, .filters { animation: riseIn .5s var(--ease) both; }
+  .kpis > *:nth-child(2), .grid > *:nth-child(2) { animation-delay: .045s; }
+  .kpis > *:nth-child(3), .grid > *:nth-child(3) { animation-delay: .09s; }
+  .kpis > *:nth-child(4), .grid > *:nth-child(4) { animation-delay: .135s; }
+  .kpis > *:nth-child(5), .grid > *:nth-child(5) { animation-delay: .18s; }
+  .kpis > *:nth-child(6), .grid > *:nth-child(6) { animation-delay: .225s; }
+  .kpis > *:nth-child(n+7), .grid > *:nth-child(n+7) { animation-delay: .27s; }
+  .tablecard { animation-delay: .06s; }
   /* skeleton shimmer for loading states */
   .skel { position: relative; overflow: hidden; background: var(--surface2); border-radius: var(--radius-sm); }
   .skel::after { content: ""; position: absolute; inset: 0;
@@ -101,11 +173,24 @@
     transition: background .13s var(--ease), color .13s var(--ease);
   }
   .nav:hover { color: var(--text); background: var(--surface2); }
-  .nav.active { color: var(--text); background: var(--surface3); }
+  /* active nav: accent-tinted, with a short accent rail on the left — reads intentional, not just "greyed" */
+  .nav.active { color: var(--text); background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(94,106,210,.22); }
+  .nav.active .ic { color: var(--accent2); }
+  .nav.active::before { content: ""; position: absolute; left: -9px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 15px; border-radius: 3px; background: var(--accent2); }
+  .nav { position: relative; }
   .nav .ic { width: 18px; height: 18px; display: grid; place-items: center; flex: none; }
   .nav .ic svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; }
-  aside .foot { margin-top: auto; padding: 10px 9px; color: var(--dim); font-size: 11px; line-height: 1.7; }
+  aside .foot { padding: 10px 9px; color: var(--dim); font-size: 11px; line-height: 1.7; }
   aside .foot a { color: var(--muted); text-decoration: none; }
+  /* theme toggle — bottom-left, pinned above the foot */
+  .themebtn { margin-top: auto; display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 8px 10px; border-radius: var(--radius-sm); background: var(--surface2);
+    border: 1px solid var(--stroke); color: var(--muted); font-size: 12.5px; font-weight: 500;
+    cursor: pointer; }
+  .themebtn:hover { color: var(--text); border-color: var(--stroke2); background: var(--surface3); }
+  .themebtn .tt-ic { width: 16px; height: 16px; flex: none; display: grid; place-items: center; }
+  .themebtn .tt-ic svg { width: 16px; height: 16px; }
 
   .content { flex: 1; min-width: 0; padding: 20px 26px 70px; }
   .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -121,8 +206,11 @@
   }
   button:hover { background: var(--surface3); border-color: var(--stroke2); }
   button:active { transform: translateY(.5px); }
-  button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
-  button.primary:hover { background: var(--accent2); }
+  /* primary: subtle top-lit gradient + inset highlight = a button with depth, not a flat fill */
+  button.primary { background: linear-gradient(180deg, var(--accent2), var(--accent)); border-color: transparent;
+    color: #fff; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 1px 2px rgba(0,0,0,.35); }
+  button.primary:hover { background: linear-gradient(180deg, #8b97ff, var(--accent2)); }
+  button.primary:active { box-shadow: inset 0 1px 3px rgba(0,0,0,.3); }
   button.danger { color: var(--red); }
   button.danger:hover { border-color: rgba(235,87,87,.45); background: rgba(235,87,87,.08); }
   input, select, textarea {
@@ -202,7 +290,8 @@
          user-select: none; white-space: nowrap; font-weight: 500; font-size: 12.5px;
          transition: background .12s var(--ease), color .12s var(--ease); }
   .tab:hover { color: var(--text); background: var(--surface2); }
-  .tab.active { background: var(--surface3); color: var(--text); }
+  .tab.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px rgba(94,106,210,.28); }
+  .tab.active .n { opacity: .85; color: var(--accent2); }
   .tab .n { font-size: 10.5px; opacity: .6; margin-left: 5px; }
   .filters { display: flex; gap: 8px; align-items: center; margin: 14px 0; flex-wrap: wrap; }
   #search { width: 220px; }
@@ -211,14 +300,14 @@
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .7px;
        color: var(--dim); padding: 12px 8px 9px; border-bottom: 1px solid var(--stroke); }
-  td { padding: 11px 8px; border-bottom: 1px solid rgba(255,255,255,.05); vertical-align: middle; }
+  td { padding: 11px 8px; border-bottom: 1px solid var(--hairline); vertical-align: middle; }
   tr.row { cursor: pointer; }
   tr.row:hover td { background: var(--surface2); }
   tr.row:last-child td { border-bottom: none; }
   .co { font-weight: 600; }
-  .title { color: #c4cad6; }
+  .title { color: var(--title-c); }
   .loc { color: var(--dim); font-size: 11.5px; }
-  .reason { color: #86d1a2; font-size: 12px; margin-top: 3px; max-width: 480px; }
+  .reason { color: var(--reason); font-size: 12px; margin-top: 3px; max-width: 480px; }
   .pill { display: inline-block; font-size: 10.5px; font-weight: 500; padding: 2px 8px;
           border-radius: 5px; letter-spacing: 0; background: var(--surface3);
           border: 1px solid var(--stroke); color: var(--muted); white-space: nowrap; }
@@ -230,10 +319,40 @@
   .pill.newco { color: var(--cyan); border-color: rgba(34,211,238,.35); background: rgba(34,211,238,.08);
                 font-size: 9.5px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; }
   .match { font-weight: 700; font-size: 12.5px; white-space: nowrap; }
-  .m-hi { color: var(--green); } .m-mid { color: var(--amber); } .m-lo { color: var(--dim); }
-  .imp { cursor: pointer; letter-spacing: 2px; font-size: 13px; color: var(--amber);
-         user-select: none; white-space: nowrap; }
-  .imp .off { color: rgba(255,255,255,.12); }
+  .match small { font-size: 9px; color: var(--dim); font-weight: 600; margin-left: 1px; }
+  .paycell { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .m-hi { color: var(--match-hi); } .m-rec { color: var(--match-rec); }
+  .m-mid { color: var(--match-mid); } .m-lo { color: var(--match-lo); }
+  /* favorite/bucket star */
+  .star { cursor: pointer; display: inline-flex; padding: 5px; border-radius: 7px; color: var(--dim);
+          transition: color .13s var(--ease), background .13s var(--ease), transform .1s var(--ease); }
+  .star svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+  .star:hover { color: var(--amber); background: var(--surface3); }
+  .star.on { color: var(--amber); }
+  .star.on svg { fill: var(--amber); stroke: var(--amber); }
+  .star:active { transform: scale(.85); }
+  /* toolbar "view a bucket" star — pinned to the far right of the filter bar */
+  .bucketbtn { margin-left: auto; display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 32px; padding: 0; color: var(--dim); }
+  .bucketbtn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+  .bucketbtn:hover { color: var(--amber); }
+  .bucketbtn.on { color: var(--amber); border-color: rgba(239,199,94,.4); background: rgba(239,199,94,.10); }
+  .bucketbtn.on svg { fill: var(--amber); stroke: var(--amber); }
+  /* bucket picker popover */
+  .bk-menu { position: absolute; z-index: 60; width: 210px; padding: 5px;
+    box-shadow: var(--shadow-lg); animation: dlgIn .13s var(--ease); }
+  .bk-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim);
+    padding: 6px 9px 4px; }
+  .bk-list { max-height: 220px; overflow-y: auto; }
+  .bk-opt { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px;
+    font-size: 12.5px; cursor: pointer; color: var(--text); }
+  .bk-opt:hover { background: var(--surface3); }
+  .bk-opt svg.i { width: 14px; height: 14px; color: var(--muted); flex: none; }
+  .bk-opt span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bk-opt.on { color: var(--amber); } .bk-opt.on svg.i:first-child { color: var(--amber); fill: var(--amber); }
+  .bk-opt.on svg.i:last-child { color: var(--amber); }
+  .bk-opt.new, .bk-opt.rm { border-top: 1px solid var(--stroke); margin-top: 4px; padding-top: 9px; color: var(--muted); }
+  .bk-opt.rm { color: var(--red); } .bk-opt.rm svg.i { color: var(--red); }
   select.phase { font-size: 12px; padding: 5px 8px; border-radius: 20px; }
   .date { color: var(--dim); font-size: 11.5px; white-space: nowrap; }
   a.out { color: var(--muted); text-decoration: none; font-size: 15px; }
@@ -248,6 +367,39 @@
   .kpi .num small { font-size: 13px; color: var(--muted); font-weight: 500; letter-spacing: 0; }
   .kpi .foot { color: var(--dim); font-size: 11px; margin-top: 3px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; }
+  /* dashboard customizer */
+  .dashbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .dashedit { display: inline-flex; align-items: center; gap: 7px; }
+  .dashedit.on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+  .dash-hint { color: var(--dim); font-size: 11.5px; }
+  .grid.editing .card { cursor: move; outline: 1px dashed var(--stroke2); outline-offset: -1px; }
+  .grid.editing .card:hover { outline-color: var(--accent); }
+  .card.dragging { opacity: .4; }
+  .dash-ctrl { position: absolute; top: 8px; right: 8px; z-index: 5; display: flex; gap: 3px;
+    padding: 3px; background: var(--surface2); border: 1px solid var(--stroke2); border-radius: 8px;
+    box-shadow: var(--shadow-sm); }
+  .dash-ctrl .dw { padding: 3px 7px; font-size: 11px; min-width: 24px; border-radius: 5px; line-height: 1.2; }
+  .dash-ctrl .dw:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+  /* deep insights */
+  .insights-wrap { margin-bottom: 18px; }
+  .ins-h { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .ins-h .sub { text-transform: none; letter-spacing: 0; color: var(--dim); font-size: 11.5px; font-weight: 400; margin-left: 8px; }
+  .insight-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .insight { background: var(--surface); border: 1px solid var(--stroke); border-radius: var(--radius);
+    padding: 13px 15px; box-shadow: var(--card-shadow); position: relative; overflow: hidden; }
+  .insight::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--stroke2); }
+  .insight.good::after { background: var(--match-hi); } .insight.warn::after { background: var(--match-mid); }
+  .insight .ilbl { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; font-weight: 500; }
+  .insight .ival { font-size: 23px; font-weight: 650; margin-top: 5px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .insight .ival small { font-size: 12px; color: var(--dim); font-weight: 500; }
+  .insight .isub { color: var(--dim); font-size: 11px; margin-top: 3px; }
+  .frate { display: flex; align-items: center; padding: 9px 2px; border-bottom: 1px solid var(--hairline); font-size: 12.5px; }
+  .frate:last-child { border-bottom: none; }
+  .frate span:first-child { flex: 1; color: var(--muted); }
+  .frate b { font-variant-numeric: tabular-nums; }
+  .frate b.good { color: var(--match-hi); } .frate b.warn { color: var(--match-mid); }
+  .dim2 { color: var(--dim); font-size: 11px; font-weight: 400; }
+  .bar .val .dim2 { margin-left: 1px; }
   .card { padding: 17px 19px; }
   .card h3 { margin: 0 0 13px; font-size: 12px; text-transform: uppercase;
              letter-spacing: .8px; color: var(--muted); font-weight: 600; }
@@ -304,7 +456,7 @@
   .prog.fail .fill { width: 100%; background: var(--red); }
   @keyframes progslide { 0% { transform: translateX(-60%);} 100% { transform: translateX(160%);} }
   .runrow { display: flex; align-items: center; gap: 12px; padding: 10px 6px;
-            border-bottom: 1px solid rgba(255,255,255,.05); font-size: 12.5px; }
+            border-bottom: 1px solid var(--hairline); font-size: 12.5px; }
   .runrow:last-child { border-bottom: none; }
   .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
   .dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(52,211,153,.6); }
@@ -336,12 +488,12 @@
   .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
   .field label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
   details { border: 1px solid var(--stroke); border-radius: 12px; margin: 10px 0;
-            background: rgba(255,255,255,.03); }
+            background: var(--glass); }
   details summary { cursor: pointer; padding: 11px 15px; font-weight: 600; user-select: none; font-size: 13px; }
   details .body { padding: 0 15px 14px; color: #c4cad6; font-size: 13px; max-height: 340px; overflow-y: auto; }
   .body p { margin: 4px 0; } .body h4 { margin: 12px 0 4px; color: var(--text); }
   .body ul { margin: 4px 0; padding-left: 20px; } .body li { margin: 2px 0; }
-  .body code { background: rgba(255,255,255,.07); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+  .body code { background: var(--codebg); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
   .body .sp { height: 6px; }
   .matchbox { border: 1px solid rgba(52,211,153,.3); background: rgba(52,211,153,.06);
               border-radius: 12px; padding: 11px 15px; margin: 10px 0; font-size: 13px; }
@@ -351,7 +503,7 @@
   .events, .docs { margin-top: 14px; border-top: 1px solid var(--stroke); padding-top: 10px; }
   .events h3, .docs h3 { font-size: 11px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
   .docs h3 .sub { display: block; text-transform: none; letter-spacing: 0; color: var(--dim); font-size: 11px; font-weight: 400; margin-top: 2px; }
-  .artrow { display: flex; align-items: center; gap: 10px; font-size: 12.5px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+  .artrow { display: flex; align-items: center; gap: 10px; font-size: 12.5px; padding: 6px 0; border-bottom: 1px solid var(--hairline); }
   .artrow:last-child { border-bottom: none; }
   .artrow .name { font-weight: 600; }
   .artrow .ev { color: var(--dim); font-size: 11px; }
@@ -382,7 +534,7 @@
   .msg.ai .rendered ul { margin: 4px 0; padding-left: 18px; }
   .msg.ai .rendered li { margin: 2px 0; }
   .msg.ai .rendered .sp { height: 7px; }
-  .msg.ai .rendered code { background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .msg.ai .rendered code { background: var(--codebg); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
   .msg.ai pre { white-space: pre-wrap; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
                 margin: 0; color: #d7dce4; }
   .msg .copy { float: right; font-size: 11px; color: var(--muted); cursor: pointer;
@@ -449,7 +601,7 @@
       display: grid; grid-template-columns: 1fr auto;
       grid-template-areas: "co match" "title title" "phase link";
       gap: 3px 10px; padding: 12px 2px;
-      border-bottom: 1px solid rgba(255,255,255,.06);
+      border-bottom: 1px solid var(--hairline);
     }
     tr.row:last-child { border-bottom: none; }
     td { display: block; border: none; padding: 0; }
@@ -497,6 +649,9 @@
     <div class="nav" data-page="activity"><span class="ic">
       <svg viewBox="0 0 24 24"><path d="M3 12h4l2.5 7 5-14L17 12h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </span> Activity</div>
+    <button id="themeToggle" class="themebtn" type="button" aria-label="Toggle light / dark mode">
+      <span class="tt-ic"></span><span class="tt-label"></span>
+    </button>
     <div class="foot">monitor · hourly<br>gmail watch · 2h</div>
   </aside>
 
@@ -531,13 +686,15 @@
           <option value="score">Sort: Score</option>
           <option value="company">Sort: Company</option>
         </select>
+        <button id="bucketBtn" class="bucketbtn" type="button" title="View a bucket" aria-label="View a bucket">${'﻿'}</button>
       </div>
       <div class="glass tablecard">
         <table>
           <thead>
             <tr>
               <th>Company</th><th>Title</th><th class="hide-sm">Category</th>
-              <th>Match</th><th class="hide-sm">Importance</th><th>Phase</th>
+              <th>AI match</th><th class="hide-sm">Pay</th><th class="hide-sm">Term</th>
+              <th class="hide-sm"></th><th>Phase</th>
               <th class="hide-sm">Updated</th><th></th>
             </tr>
           </thead>
@@ -610,8 +767,6 @@
         <div class="field"><label>URL</label><input id="fUrl"></div>
         <div class="field"><label>Category</label><select id="fCategory"></select></div>
         <div class="field"><label>Phase</label><select id="fPhase"></select></div>
-        <div class="field"><label>Importance (1–5)</label>
-          <input id="fImportance" type="number" min="1" max="5" value="3"></div>
         <div class="field"><label>Term (e.g. Summer 2027)</label><input id="fTerm"></div>
       </div>
       <div class="field"><label>Description</label><textarea id="fDescription" rows="5"></textarea></div>
@@ -776,6 +931,9 @@ const IC = {
   ban:'<circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/>',
   check:'<path d="M5 13l4 4L19 7"/>',
   chev:'<path d="M9 6l6 6-6 6"/>',
+  pay:'<path d="M12 2v20M17 6.5C17 4.6 14.8 3.5 12 3.5S7 4.6 7 6.5 9.2 9.5 12 10s5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/>',
+  grid:'<rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/>',
+  star:'<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
 };
 function icon(name, cls) {
   return `<svg class="i ${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[name] || ''}</svg>`;
@@ -790,7 +948,8 @@ const skelCards = (n = 6) =>
 const state = { page:"tracker", tab:"top", q:"", sort:"rank", watchlist:"",
                 cats:[], catEx:false, catSel:new Set(), // catSel = selected LEAF ids; cats = query cover
                 terms:[], termEx:false, terms_all:[],
-                anScope:"all", // analytics scope
+                anScope:"all", // analytics scope: "all" | "applied" | node id
+                buckets:[], bucket:"", // user-defined favorite lists + active bucket filter
                 counts:{}, recommended:0, jobs:[] };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
@@ -834,17 +993,139 @@ async function apiCall(path, opts = {}) {
   return body;
 }
 
+/* ── theme (dark / light) ─────────────────────────────────────────────────── */
+const THEME_IC = {
+  // moon = currently dark (click for light); sun = currently light (click for dark)
+  dark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+  light:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+};
+function currentTheme() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }
+function paintThemeBtn() {
+  const t = currentTheme(), btn = $("themeToggle");
+  if (!btn) return;
+  // show the mode you'll switch TO
+  btn.querySelector(".tt-ic").innerHTML = t === "light" ? THEME_IC.dark : THEME_IC.light;
+  btn.querySelector(".tt-label").textContent = t === "light" ? "Dark mode" : "Light mode";
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", t === "light" ? "#f5f6f8" : "#08090a");
+}
+function initTheme() {
+  paintThemeBtn();
+  const btn = $("themeToggle");
+  if (btn) btn.onclick = () => {
+    const next = currentTheme() === "light" ? "dark" : "light";
+    if (next === "light") document.documentElement.setAttribute("data-theme", "light");
+    else document.documentElement.removeAttribute("data-theme");
+    try { localStorage.setItem("theme", next); } catch (e) {}
+    paintThemeBtn();
+  };
+}
+
 function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.classList.add("show");
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2200);
 }
 
+// ── Favorite buckets (user-defined lists: "Dream jobs" …) ─────────────────
+function starHtml(j) {
+  const on = !!(j.bucket && j.bucket.length);
+  return `<span class="star ${on ? "on" : ""}" data-id="${j.id}" title="${on ? "In: " + esc(j.bucket) : "Save to a bucket"}">${icon('star')}</span>`;
+}
+async function loadBuckets() {
+  try { const r = await apiCall("/meta/buckets"); state.buckets = JSON.parse(r.value || "[]"); }
+  catch { state.buckets = []; }
+  if (!Array.isArray(state.buckets)) state.buckets = [];
+}
+async function saveBuckets() {
+  await apiCall("/meta/buckets", { method:"PUT", body: JSON.stringify({ value: JSON.stringify(state.buckets) }) });
+}
+function applyBucket(id, name) {   // optimistic assign/move/remove
+  const j = state.jobs.find(x => x.id === id);
+  if (j) { j.bucket = name; renderRows(); }
+  closeBucketMenu();
+  if (state.bucket && name !== state.bucket) { // dropped out of the bucket being viewed
+    state.jobs = state.jobs.filter(x => x.id !== id); renderRows();
+  }
+  toast(name ? "Saved to " + name : "Removed from bucket");
+  apiCall("/jobs/" + id, { method:"PATCH", body: JSON.stringify({ bucket: name }) })
+    .catch(e => { toast("Failed: " + e.message); load(); });
+}
+function buildBucketFilter() {
+  const btn = $("bucketBtn");
+  if (!btn) return;
+  btn.innerHTML = icon('star');
+  paintBucketBtn();
+  btn.onclick = (e) => { e.stopPropagation(); openBucketView(btn); };
+}
+function paintBucketBtn() {
+  const btn = $("bucketBtn"); if (!btn) return;
+  btn.classList.toggle("on", !!state.bucket);
+  btn.title = state.bucket
+    ? "Viewing: " + (state.bucket === "__any" ? "Any bucket" : state.bucket)
+    : "View a bucket";
+}
+// Popover on the toolbar star → pick which bucket's jobs to show.
+function openBucketView(anchor) {
+  closeBucketMenu();
+  const opts = [["", "All jobs"], ["__any", "★ Any bucket"], ...state.buckets.map(b => [b, b])];
+  const m = document.createElement("div");
+  m.className = "bk-menu glass";
+  m.innerHTML = `<div class="bk-head">Show bucket</div><div class="bk-list">`
+    + opts.map(([v, l]) => `<div class="bk-opt ${v === state.bucket ? "on" : ""}" data-v="${esc(v)}">${icon('star')}<span>${esc(l)}</span>${v === state.bucket ? icon('check') : ""}</div>`).join("")
+    + `</div>`;
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect(), w = 210;
+  m.style.top = (r.bottom + 6 + window.scrollY) + "px";
+  m.style.left = Math.max(8, r.right + window.scrollX - w) + "px"; // right-aligned to the star
+  _bucketMenu = m;
+  m.querySelectorAll(".bk-opt").forEach(o => o.onclick = (e) => {
+    e.stopPropagation(); state.bucket = o.dataset.v; paintBucketBtn(); closeBucketMenu(); load();
+  });
+  setTimeout(() => document.addEventListener("click", closeBucketMenu), 0);
+}
+let _bucketMenu = null;
+function closeBucketMenu() { if (_bucketMenu) { _bucketMenu.remove(); _bucketMenu = null; document.removeEventListener("click", closeBucketMenu); } }
+function openBucketMenu(anchor, id) {
+  closeBucketMenu();
+  const j = state.jobs.find(x => x.id === id) || {};
+  const cur = j.bucket || "";
+  const rows = state.buckets.map(b =>
+    `<div class="bk-opt ${b === cur ? "on" : ""}" data-b="${esc(b)}">${icon('star')}<span>${esc(b)}</span>${b === cur ? icon('check') : ""}</div>`).join("")
+    || `<div class="hint" style="padding:6px 9px">No buckets yet — make one below.</div>`;
+  const m = document.createElement("div");
+  m.className = "bk-menu glass";
+  m.innerHTML = `
+    <div class="bk-head">Save to</div>
+    <div class="bk-list">${rows}</div>
+    ${cur ? `<div class="bk-opt rm" data-b="">${icon('ban')}<span>Remove from ${esc(cur)}</span></div>` : ""}
+    <div class="bk-opt new" data-new="1">${icon('plus')}<span>New bucket…</span></div>`;
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  const w = 210;
+  m.style.top = (r.bottom + 6 + window.scrollY) + "px";
+  m.style.left = Math.max(8, Math.min(r.left + window.scrollX, window.innerWidth - w - 10)) + "px";
+  _bucketMenu = m;
+  m.querySelectorAll(".bk-opt").forEach(o => o.onclick = async (e) => {
+    e.stopPropagation();
+    if (o.dataset.new) {
+      const name = (prompt("Name this bucket (e.g. Dream jobs):") || "").trim().slice(0, 60);
+      if (!name) return;
+      if (!state.buckets.includes(name)) { state.buckets.push(name); saveBuckets().catch(() => {}); buildBucketFilter(); }
+      applyBucket(id, name);
+    } else {
+      applyBucket(id, o.dataset.b);
+    }
+  });
+  setTimeout(() => document.addEventListener("click", closeBucketMenu), 0);
+}
+
+// AI match is 0-100. Bands: ≥85 top (green), ≥70 rec (blue-accent), ≥50 look (amber), else dim.
+function matchClass(s) { return s >= 85 ? "m-hi" : s >= 70 ? "m-rec" : s >= 50 ? "m-mid" : "m-lo"; }
 function matchHtml(j) {
   if (j.match_score != null) {
-    const cls = j.match_score >= 7 ? "m-hi" : j.match_score >= 4 ? "m-mid" : "m-lo";
-    return `<span class="match ${cls}" title="${esc(j.match_reason)}">${j.match_score}/10</span>`;
+    return `<span class="match ${matchClass(j.match_score)}" title="AI match — ${esc(j.match_reason)}">${j.match_score}<small>/100</small></span>`;
   }
-  if (j.ai_score != null) return `<span class="match m-mid" title="${esc(j.ai_reason)}">${j.ai_score}/10</span>`;
+  if (j.ai_score != null) return `<span class="match m-lo" title="Pre-score — ${esc(j.ai_reason)}">${j.ai_score * 10}<small>/100</small></span>`;
   return `<span class="loc">—</span>`;
 }
 
@@ -870,6 +1151,7 @@ async function load() {
   else if (tab.phases) p.set("phase", tab.phases);
   if (state.q) p.set("q", state.q);
   if (state.cats.length) { p.set("category", state.cats.join(",")); if (state.catEx) p.set("catmode", "exclude"); }
+  if (state.bucket) p.set("bucket", state.bucket);
   if (state.watchlist !== "") p.set("watchlist", state.watchlist);
   if (state.terms.length) { p.set("term", state.terms.join(",")); if (state.termEx) p.set("termmode", "exclude"); }
   p.set("sort", state.sort);
@@ -894,11 +1176,6 @@ function renderTabs() {
     el.onclick = () => { state.tab = el.dataset.tab; load(); });
 }
 
-function impHtml(v) {
-  let s = "";
-  for (let i = 1; i <= 5; i++) s += `<span class="${i<=v?"":"off"}">★</span>`;
-  return s;
-}
 
 function renderRows() {
   const tb = $("rows");
@@ -918,9 +1195,9 @@ function renderRows() {
       </td>
       <td class="hide-sm">${catPills(j, 1)}</td>
       <td>${matchHtml(j)}</td>
-      <td class="hide-sm">${j.likeability != null ? `<span class="match ${j.likeability >= 8 ? "m-hi" : j.likeability >= 5 ? "m-mid" : "m-lo"}" title="Company desirability (pay · prestige · brand)">${icon('gem')} ${j.likeability}</span>` : '<span class="loc">—</span>'}</td>
+      <td class="hide-sm">${j.likeability != null ? `<span class="paycell" title="Estimated pay — comp tier for this role (1–10)">${j.likeability}</span>` : '<span class="loc">—</span>'}</td>
       <td class="hide-sm date">${j.term ? esc(j.term) : "Unknown"}</td>
-      <td class="hide-sm"><span class="imp" data-id="${j.id}" data-v="${j.importance}" title="Importance = your personal priority (1–5 ★). Click to cycle. Higher stars rank the job higher in Match-rank sort.">${impHtml(j.importance)}</span></td>
+      <td class="hide-sm">${starHtml(j)}</td>
       <td>
         <select class="phase" data-id="${j.id}">
           ${PHASES.map(p => `<option value="${p}" ${p===j.phase?"selected":""}>${PHASE_LABEL[p]}</option>`).join("")}
@@ -931,7 +1208,7 @@ function renderRows() {
     </tr>`).join("");
 
   tb.querySelectorAll("tr.row").forEach(tr => tr.onclick = (e) => {
-    if (e.target.closest("select, .imp, a")) return;
+    if (e.target.closest("select, .star, a")) return;
     openDetail(tr.dataset.id);
   });
   tb.querySelectorAll("select.phase").forEach(sel => {
@@ -964,11 +1241,9 @@ function renderRows() {
     apiCall("/jobs/" + el.dataset.id, { method:"PATCH", body: JSON.stringify({ phase: "not_applying" }) })
       .catch(e => { toast("Failed: " + e.message); load(); });
   });
-  tb.querySelectorAll(".imp").forEach(el => el.onclick = async (e) => {
+  tb.querySelectorAll(".star").forEach(el => el.onclick = (e) => {
     e.stopPropagation();
-    const next = (Number(el.dataset.v) % 5) + 1;
-    await apiCall("/jobs/" + el.dataset.id, { method:"PATCH", body: JSON.stringify({ importance: next }) });
-    el.dataset.v = next; el.innerHTML = impHtml(next);
+    openBucketMenu(el, el.dataset.id);
   });
 }
 
@@ -985,7 +1260,7 @@ function donutSvg(items, size = 150) {
     off += len;
   }
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)">
-    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="15"/>
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--hairline)" stroke-width="15"/>
     ${segs}</svg>`;
 }
 
@@ -1061,8 +1336,8 @@ async function loadAnalytics() {
   const active = (s.phases.applied || 0) + (s.phases.oa || 0) + (s.phases.interview || 0) + (s.phases.offer || 0);
   const funnel = ["found","applied","oa","interview","offer","accepted"]
     .map(p => ({ label: PHASE_LABEL[p], n: s.phases[p] || 0 }));
-  // Rolled-up per-node counts (cat_counts). Charts use the MID level so
-  // multi-category jobs aggregate into meaningful groups.
+  // Rolled-up per-node counts (cat_counts). Charts use the MID level (parents of
+  // roots' children) so multi-category jobs aggregate into meaningful groups.
   const cc = s.cat_counts || {};
   const midNodes = CAT_ROOTS.flatMap(r => CAT_KIDS[r] || []);
   const shade = (i, n) => `hsl(222 12% ${Math.round(72 - 42 * (i / Math.max(1, n - 1)))}%)`; // monochrome ramp, pops on dark
@@ -1074,7 +1349,8 @@ async function loadAnalytics() {
     .sort((a,b) => b.n - a.n);
   const weekly = s.weekly.map(w => ({ label: w.wk.slice(5), n: w.n }));
   const monthly = s.monthly.map(m => ({ label: m.mo, n: m.n }));
-  const hist = s.match_histogram.filter(h => h.s >= 0).map(h => ({ label: `${h.s}/10`, n: h.n }));
+  const hist = s.match_histogram.filter(h => h.s >= 0)
+    .map(h => ({ label: h.s === 9 ? "90-100" : `${h.s * 10}-${h.s * 10 + 9}`, n: h.n }));
   const srcLabels = { monitor:"Job monitor", manual:"Manual", link:"URL import",
                       pasted:"Pasted", linkedin_paste:"LinkedIn bulk", email:"Email" };
   const sources = s.sources.map(x => ({ label: srcLabels[x.source] || x.source, n: x.n }));
@@ -1113,6 +1389,15 @@ async function loadAnalytics() {
       <div class="glass kpi"><div class="lbl">Cache hit rate</div>
         <div class="num">${hit != null ? Math.round(hit*100) : "—"}<small>${hit != null ? "%" : ""}</small></div>
         <div class="foot">of cacheable profile tokens</div></div>
+    </div>
+
+    ${insightsHtml(s)}
+
+    <div class="dashbar">
+      <button id="dashEditBtn" class="dashedit">${icon('grid')} Customize layout</button>
+      <span class="dash-hint" hidden>Drag panels to reorder · use the width buttons on each panel · saves automatically</span>
+      <div class="spacer"></div>
+      <button id="dashReset" class="dash-reset" hidden>Reset</button>
     </div>
 
     <div class="grid">
@@ -1180,6 +1465,162 @@ async function loadAnalytics() {
   renderSkillView("all");
 
   renderCostCenter();
+  setupDashboard();
+}
+
+// ── Deep insights: behaviour-driven read of what you're actually working ────
+function insightsHtml(s) {
+  const i = s.insights || {}; const cc = s.cat_counts || {};
+  if (!i.applied_total) {
+    return `<div class="glass card" style="margin-bottom:16px"><h3>Deep insights
+      <span class="sub">how your search is actually going — unlocks once you've applied to a few roles</span></h3>
+      <div class="hint">No applications tracked yet. As you move jobs to Applied+, this fills with where your effort goes, fit quality, conversion, and follow-ups.</div></div>`;
+  }
+  // which category you're pointing at most (mid-level, by applications)
+  const mids = CAT_ROOTS.flatMap(r => CAT_KIDS[r] || []);
+  const ranked = mids.map(id => ({ id, applied: cc[id]?.applied || 0, avail: cc[id]?.n || 0 }))
+    .filter(x => x.applied > 0).sort((a, b) => b.applied - a.applied);
+  const top = ranked[0];
+  const mo = i.momentum || {}; const dm = (mo.this_week || 0) - (mo.last_week || 0);
+  const momoTone = dm > 0 ? "good" : dm < 0 ? "warn" : "";
+  const tile = (lbl, val, sub, tone) => `<div class="insight ${tone || ""}">
+    <div class="ilbl">${lbl}</div><div class="ival">${val}</div><div class="isub">${sub}</div></div>`;
+  const mAppl = i.avg_match_applied, mFound = i.avg_match_found;
+  const matchGap = (mAppl != null && mFound != null) ? mAppl - mFound : null;
+
+  const tiles = [
+    tile("Applications", i.applied_total, top ? `most in ${esc(catLabel(top.id))}` : "", ""),
+    tile("Avg fit applied", mAppl != null ? mAppl + "<small>/100</small>" : "—",
+      matchGap != null ? (matchGap >= 0 ? `+${matchGap} vs your Found avg` : `${matchGap} vs Found — aim higher`) : "AI match of what you apply to",
+      mAppl != null && mAppl < 60 ? "warn" : "good"),
+    tile("In-lane focus", i.in_lane_pct != null ? i.in_lane_pct + "<small>%</small>" : "—",
+      "of your apps are security-lane", i.in_lane_pct != null && i.in_lane_pct < 50 ? "warn" : "good"),
+    tile("Avg pay targeted", i.avg_pay_applied != null ? i.avg_pay_applied + "<small>/10</small>" : "—", "comp tier you're chasing", ""),
+    tile("Follow-ups due", i.followups_due || 0, "applied, silent 14 days+", i.followups_due > 0 ? "warn" : "good"),
+    tile("Momentum", `${mo.this_week || 0}${dm !== 0 ? ` <small>${dm > 0 ? "▲" : "▼"}${Math.abs(dm)}</small>` : ""}`,
+      `apps this week · ${mo.last_week || 0} last`, momoTone),
+  ].join("");
+
+  // effort vs market: where you're spending applications vs what's available
+  const maxA = Math.max(1, ...ranked.map(r => r.applied));
+  const effort = ranked.slice(0, 6).map(r =>
+    `<div class="bar"><div class="lbl" title="${esc(catLabel(r.id))}">${esc(catLabel(r.id))}</div>
+      <div class="track"><div class="fill" style="width:${(100 * r.applied / maxA).toFixed(0)}%"></div></div>
+      <div class="val">${r.applied}<span class="dim2">/${r.avail}</span></div></div>`).join("")
+    || '<div class="hint">No categorized applications yet.</div>';
+
+  // conversion funnel rates
+  const f = i.funnel || {};
+  const fr = (v) => v == null ? "—" : v + "%";
+  const funnelRates = `
+    <div class="frate"><span>Found → Applied</span><b>${fr(f.found_to_applied)}</b></div>
+    <div class="frate"><span>Applied → Interview+</span><b class="${(f.applied_to_interview||0) >= 15 ? "good" : ""}">${fr(f.applied_to_interview)}</b></div>
+    <div class="frate"><span>Applied → Rejected</span><b class="${(f.applied_to_rejected||0) >= 50 ? "warn" : ""}">${fr(f.applied_to_rejected)}</b></div>`;
+
+  // outcomes by lane (root)
+  const rootLbl = { security: "Security", swe: "SWE", other: "Other" };
+  const byRoot = i.by_root || {};
+  const outcomes = Object.keys(rootLbl).filter(r => (byRoot[r]?.applied || 0) > 0).map(r => {
+    const b = byRoot[r]; const ir = Math.round(100 * b.interviewed / b.applied), rr = Math.round(100 * b.rejected / b.applied);
+    return `<div class="frate"><span>${rootLbl[r]} <span class="dim2">· ${b.applied} apps</span></span>
+      <b class="${ir >= 15 ? "good" : ""}">${ir}%</b><span class="dim2" style="margin-left:8px">int</span>
+      <b class="${rr >= 50 ? "warn" : ""}" style="margin-left:12px">${rr}%</b><span class="dim2" style="margin-left:4px">rej</span></div>`;
+  }).join("") || '<div class="hint">No outcomes yet.</div>';
+
+  return `
+    <div class="insights-wrap">
+      <h3 class="ins-h">Deep insights <span class="sub">what your activity says — not just what's in the pipeline</span></h3>
+      <div class="insight-strip">${tiles}</div>
+      <div class="grid" style="margin-top:14px">
+        <div class="glass card"><h3>Where your effort goes <span class="sub">applications vs available, by category</span></h3>${effort}</div>
+        <div class="glass card"><h3>Conversion <span class="sub">how far your applications get</span></h3>${funnelRates}</div>
+        <div class="glass card"><h3>Outcomes by lane <span class="sub">interview vs rejection rate</span></h3>${outcomes}</div>
+      </div>
+    </div>`;
+}
+
+/* ── customizable dashboard: drag panels to reorder + resize width, persisted ── */
+const DASH_KEY = "dashLayoutV1";
+let dashEditing = false;
+function loadDash() { try { return JSON.parse(localStorage.getItem(DASH_KEY) || "{}"); } catch { return {}; } }
+function saveDash(d) { try { localStorage.setItem(DASH_KEY, JSON.stringify(d)); } catch {} }
+function dashGrid() { return document.querySelector("#page-analytics .grid"); }
+function panelId(card) {
+  const h = card.querySelector("h3"); const t = (h ? h.textContent : card.textContent) || "";
+  return t.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40);
+}
+function applyDash() {
+  const grid = dashGrid(); if (!grid) return;
+  const d = loadDash(), span = d.span || {};
+  const cards = [...grid.children];
+  cards.forEach(c => {
+    c.dataset.panel = panelId(c);
+    c.dataset.defcol = c.style.gridColumn || "";       // template default (some are full-width)
+    const sp = span[c.dataset.panel];
+    c.style.gridColumn = sp ? (sp === "full" ? "1 / -1" : "span " + sp) : c.dataset.defcol;
+  });
+  const order = Array.isArray(d.order) ? d.order : [];
+  const byId = Object.fromEntries(cards.map(c => [c.dataset.panel, c]));
+  const seq = [...order.filter(id => byId[id]), ...cards.map(c => c.dataset.panel).filter(id => !order.includes(id))];
+  seq.forEach(id => grid.appendChild(byId[id]));
+}
+function setSpan(card, w) {
+  const d = loadDash(); d.span = d.span || {}; d.span[card.dataset.panel] = w; saveDash(d);
+  card.style.gridColumn = w === "full" ? "1 / -1" : "span " + w;
+}
+function persistOrder() {
+  const grid = dashGrid(); if (!grid) return;
+  const d = loadDash(); d.order = [...grid.children].map(c => c.dataset.panel); saveDash(d);
+}
+function setupPanel(card) {
+  let ctrl = card.querySelector(".dash-ctrl");
+  if (dashEditing && !ctrl) {
+    ctrl = document.createElement("div"); ctrl.className = "dash-ctrl";
+    ctrl.innerHTML = `<button class="dw" data-w="1" title="1 column">1</button>
+      <button class="dw" data-w="2" title="2 columns">2</button>
+      <button class="dw" data-w="full" title="Full width">↔</button>`;
+    card.appendChild(ctrl);
+    ctrl.querySelectorAll(".dw").forEach(b => b.onclick = (e) => { e.stopPropagation(); setSpan(card, b.dataset.w); });
+  } else if (!dashEditing && ctrl) { ctrl.remove(); }
+  card.setAttribute("draggable", dashEditing ? "true" : "false");
+  card.ondragstart = dashEditing ? (e) => { card.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text", ""); } : null;
+  card.ondragend = dashEditing ? () => { card.classList.remove("dragging"); persistOrder(); } : null;
+}
+function toggleDashEdit() {
+  dashEditing = !dashEditing;
+  const grid = dashGrid(); if (!grid) return;
+  grid.classList.toggle("editing", dashEditing);
+  const btn = $("dashEditBtn");
+  btn.classList.toggle("on", dashEditing);
+  btn.innerHTML = dashEditing ? icon('check') + " Done" : icon('grid') + " Customize layout";
+  document.querySelector(".dash-hint").hidden = !dashEditing;
+  $("dashReset").hidden = !dashEditing;
+  [...grid.children].forEach(setupPanel);
+}
+function setupDashboard() {
+  const grid = dashGrid(); if (!grid) return;
+  applyDash();
+  grid.ondragover = (e) => {
+    if (!dashEditing) return;
+    e.preventDefault();
+    const dragging = grid.querySelector(".dragging"); if (!dragging) return;
+    let closest = null, best = Infinity;
+    grid.querySelectorAll(".card:not(.dragging)").forEach(c => {
+      const r = c.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), dist = dx * dx + dy * dy;
+      if (dist < best) { best = dist; closest = c; }
+    });
+    if (closest) { const r = closest.getBoundingClientRect();
+      (e.clientY > r.top + r.height / 2 || e.clientX > r.left + r.width / 2) ? closest.after(dragging) : closest.before(dragging); }
+  };
+  $("dashEditBtn").onclick = toggleDashEdit;
+  $("dashReset").onclick = () => { saveDash({}); dashEditing = false; loadAnalytics(); };
+  if (dashEditing) {           // preserve edit mode across re-renders
+    grid.classList.add("editing");
+    $("dashEditBtn").classList.add("on"); $("dashEditBtn").innerHTML = icon('check') + " Done";
+    document.querySelector(".dash-hint").hidden = false; $("dashReset").hidden = false;
+    [...grid.children].forEach(setupPanel);
+  }
 }
 
 // Cost analytics center: pick any mix of providers, see spend over time + totals.
@@ -1294,6 +1735,21 @@ async function loadActivity() {
     </div>`;
   };
 
+  const runs = a.runs ? a.runs.map(r => {
+    const dot = r.status !== "completed" ? "busy" : r.conclusion === "success" ? "ok" : "bad";
+    const dur = r.started_at && r.updated_at
+      ? Math.max(1, Math.round((new Date(r.updated_at) - new Date(r.started_at)) / 1000)) + "s" : "";
+    return `<div class="runrow">
+      <span class="dot ${dot}"></span>
+      <span class="name">${esc(r.name)}</span>
+      <span class="ev">${esc(r.event)} · #${r.run_number}</span>
+      <span class="spacer"></span>
+      <span class="ev">${dur}</span>
+      <span class="date">${rel(r.started_at)}</span>
+      <a href="${esc(r.url)}" target="_blank" rel="noopener">↗</a>
+    </div>`;
+  }).join("") : `<div class="hint">Workflow runs unavailable: ${esc(a.runs_error || "unknown")}.</div>`;
+
   const feed = (a.events || []).map(e => `
     <div class="runrow">
       <span class="evi">${icon(EV_ICON[e.type] || "file")}</span>
@@ -1306,22 +1762,21 @@ async function loadActivity() {
   el.innerHTML = `
     <div class="kpis">
       ${hbCard("monitor", mon,
-          mon ? `${mon.matched} matched · ${mon.new} new · ${mon.notified} notified` : "runs on a schedule")}
+          mon ? `${mon.matched} matched · ${mon.new} new · ${mon.notified} notified` : "runs hourly on Actions")}
       ${hbCard("push", push,
           push ? `${push.inserted}/${push.received} added as found` : "fires when alerts land")}
       ${hbCard("gmail", gm,
-          gm ? `${gm.emails} email(s) scanned · ${gm.events} event(s)` : "runs on a schedule")}
+          gm ? `${gm.emails} email(s) scanned · ${gm.events} event(s)` : "runs every 2h on Actions")}
       ${hbCard("profile", prof,
           prof ? `${(prof.chars || 0).toLocaleString()} chars (${esc(prof.key || "")})` : "not synced yet")}
     </div>
     <div id="actPanelHost"></div>
     <div class="grid">
       <div class="glass card"><h3>Workflow runs
-        <span class="sub">straight from GitHub Actions</span></h3><div id="runsList"></div></div>
+        <span class="sub">straight from GitHub Actions</span></h3><div id="runsList">${runs}</div></div>
       <div class="glass card feed"><h3>Recent job events
         <span class="sub">creates, phase changes, email verdicts</span></h3>${feed}</div>
     </div>`;
-  renderRunsList(a);
 
   // Click a card → toggle its explain-and-run panel below the row.
   el.querySelectorAll(".hb[data-act]").forEach(card => card.onclick = () => {
@@ -1376,7 +1831,7 @@ async function runAction(key) {
     try {
       const a = await apiCall("/activity");
       window._activity = a;
-      renderRunsList(a);
+      $("runsList") && renderRunsList(a);
       run = (a.runs || []).find(r => r.name === m.wf && r.event === "workflow_dispatch"
         && new Date(r.started_at).getTime() >= dispatchedAt - 20000);
     } catch {}
@@ -1434,13 +1889,13 @@ async function openDetail(id) {
       ${job.watchlisted === 0 ? '<span class="pill newco">not on watchlist</span>' : ""}
       ${matchHtml(job)}
       <div class="spacer"></div>
-      <span class="imp" id="dImp" data-v="${job.importance}">${impHtml(job.importance)}</span>
+      <span class="star ${job.bucket ? "on" : ""}" id="dStar" data-id="${job.id}" title="${job.bucket ? "In: " + esc(job.bucket) : "Save to a bucket"}">${icon('star')}</span>
       <select id="dPhase" class="phase">
         ${PHASES.map(p => `<option value="${p}" ${p===job.phase?"selected":""}>${PHASE_LABEL[p]}</option>`).join("")}
       </select>
     </div>
     ${job.match_reason ? `<div class="matchbox">${icon('target')} <b>Why this matches you:</b> ${esc(job.match_reason)}</div>` : ""}
-    ${job.company_blurb ? `<div class="matchbox" style="border-color:rgba(96,165,250,.3);background:rgba(96,165,250,.06)">${icon('building')} <b>About ${esc(job.company)}${job.likeability != null ? ` (${icon('gem')} ${job.likeability}/10)` : ""}:</b> ${esc(job.company_blurb)}</div>` : ""}
+    ${job.company_blurb ? `<div class="matchbox" style="border-color:rgba(96,165,250,.3);background:rgba(96,165,250,.06)">${icon('building')} <b>About ${esc(job.company)}${job.likeability != null ? ` (pay ${job.likeability}/10)` : ""}:</b> ${esc(job.company_blurb)}</div>` : ""}
     ${skills.length ? `<div class="chips">${skills.map(s => `<span class="chip">${esc(s)}</span>`).join("")}</div>` : ""}
     <div class="hint" style="margin-bottom:10px">
       ${esc(job.location) || "—"} · ${job.term ? esc(job.term) : "Unknown"} · via ${esc(job.source)}
@@ -1487,11 +1942,7 @@ async function openDetail(id) {
     await apiCall("/jobs/" + id, { method:"PATCH", body: JSON.stringify({ phase: e.target.value }) });
     toast("Phase updated"); load(); openDetail(id);
   };
-  $("dImp").onclick = async () => {
-    const next = (Number($("dImp").dataset.v) % 5) + 1;
-    await apiCall("/jobs/" + id, { method:"PATCH", body: JSON.stringify({ importance: next }) });
-    $("dImp").dataset.v = next; $("dImp").innerHTML = impHtml(next); load();
-  };
+  $("dStar").onclick = (e) => { e.stopPropagation(); openBucketMenu($("dStar"), id); };
   detailDlg.showModal();
 }
 
@@ -1582,7 +2033,7 @@ $("rInput").onkeydown = (e) => {
 function currentDoc() { return [...rMessages].reverse().find(m => m.role === "assistant")?.content || ""; }
 function docFilename() {
   const co = (detailJob?.company || "Company").replace(/[^\w]+/g, "_");
-  return `the candidate_Bhardwaj_${co}_${DOC_META[rKind].label.replace(/\s+/g, "_")}`;
+  return `${co}_${DOC_META[rKind].label.replace(/\s+/g, "_")}`;
 }
 
 $("rSave").onclick = async () => {
@@ -1655,12 +2106,8 @@ function showDocLanding() {
         <button id="rGenPro">Use my Claude (free)</button>
       </div>
       <p class="hint" style="font-size:11px; margin-top:10px">
-        <b>Generate</b> runs the model on the API. <b>Use my AI</b> copies the full prompt to run on your
-        own AI plan ($0). You can also upload a file you already have from the job's Documents section.
-      </p>
-      <p class="hint" style="font-size:11px; margin-top:8px; color:var(--amber)">
-        ⚠ A draft, not a final. Always review and edit before sending, make sure every claim is true
-        and sounds like you, and do your own research on the company.
+        <b>Generate</b> runs Opus on the API. <b>Use my Claude</b> copies the full prompt to paste into
+        claude.ai on your Pro plan ($0). You can also upload a file you already have from the job's Documents section.
       </p>
     </div>`;
   $("rGen").onclick = () => { $("rInputRow").style.display = ""; sendDocTurn(null); };
@@ -1896,7 +2343,6 @@ function fillForm(d) {
   { const leaf = jobCats(d).find(id => (CAT_KIDS[id]||[]).length === 0);
     $("fCategory").value = leaf || (CATS[d.category] ? d.category : "oth_misc"); }
   $("fPhase").value = d.phase || "found";
-  $("fImportance").value = d.importance || 3;
   $("fTerm").value = d.term || "";
   $("fDescription").value = d.description || ""; $("fRequirements").value = d.requirements || "";
   $("fErr").textContent = d._dupWarning || "";
@@ -1930,7 +2376,6 @@ $("fSave").onclick = async () => {
     company: $("fCompany").value.trim(), title: $("fTitle").value.trim(),
     location: $("fLocation").value.trim(), url: $("fUrl").value.trim(),
     category: $("fCategory").value, phase: $("fPhase").value,
-    importance: Number($("fImportance").value) || 3,
     term: $("fTerm").value.trim(),
     description: $("fDescription").value, requirements: $("fRequirements").value,
   };
@@ -1986,9 +2431,12 @@ $("sortSel").onchange = (e) => { state.sort = e.target.value; load(); };
 
 // Boot: taxonomy first (drives the category select, tree filter, pills), then jobs.
 (async () => {
+  initTheme();
   try { await loadTaxonomy(); } catch (e) { console.warn("taxonomy load failed", e); }
+  await loadBuckets();
   buildCatSelect();
   catTreeFilter("catMsel");
+  buildBucketFilter();
   await load();
 })().catch(e => { $("empty").hidden = false; $("empty").textContent = "Failed to load: " + e.message; });
 </script>

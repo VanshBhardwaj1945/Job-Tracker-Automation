@@ -95,6 +95,12 @@ const MIGRATIONS: string[][] = [
     `ALTER TABLE jobs ADD COLUMN categories TEXT NOT NULL DEFAULT '[]'`,
     `ALTER TABLE jobs ADD COLUMN cat_path TEXT NOT NULL DEFAULT ''`,
   ],
+  // v8: user-defined favorite buckets ("Dream jobs" …). Empty string = unstarred.
+  // match_score moves to a 0-100 scale (no column change — already INTEGER; old
+  // 0-10 rows are re-scored by the next rematch).
+  [
+    `ALTER TABLE jobs ADD COLUMN bucket TEXT NOT NULL DEFAULT ''`,
+  ],
 ];
 
 let migrated = false;

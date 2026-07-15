@@ -173,6 +173,20 @@ the document context.
   manual list needed, though you can still curate one via the meta key
   `known_skills` (a JSON array).
 
+## 6. Built-in, zero config
+
+These just work out of the box:
+
+- **0–100 AI match** + apply-now tiers (Top ≥85 / Recommended ≥70 / Take a look ≥50),
+  an estimated **Pay** tier, and a **deep-insights** panel that reads your own
+  application history (fit quality, focus, conversion, momentum, follow-ups).
+- **Favorite buckets** — star any job into lists you name yourself ("Dream jobs" …).
+- **Light / dark mode** toggle (bottom-left), remembered per browser.
+- **Customizable dashboard** — on Analytics, hit *Customize layout* to drag panels
+  and resize their width; the layout saves to your browser.
+- Matching uses a **mid-tier model** by default (`AI_MODEL` overrides it) — prompt
+  caching keeps the cost low.
+
 ## Notes
 
 - **Fail-open by design:** no API key → keyword-only results; tracker down → the

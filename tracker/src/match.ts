@@ -8,8 +8,12 @@ import { normalizeCategory, normalizeCategories, catPath, TAXONOMY, CAT_CHILDREN
 import { fetchUrlText, parseJobText, FORM_JUNK_RE } from "./parse";
 import { logUsage } from "./usage";
 
-const MODEL = "claude-haiku-4-5-20251001";
-const BATCH = 15;
+// One tier up from Haiku for sharper judgment; the cached profile prefix
+// (cache_control below) keeps the cost close to Haiku on repeat batches.
+const MODEL = "claude-sonnet-4-6";
+// Sonnet is slower than Haiku; background (waitUntil) paths apply per-batch, so a
+// smaller batch means each chunk persists before the ~30s window closes.
+const BATCH = 6;
 
 // The candidate profile is stable for days, but rematches trickle in over hours
 // (per-row ♻️, weekly digest). The default 5-min cache expires between them; the
@@ -124,30 +128,31 @@ full profile (master resume + their portfolio assistant's knowledge base):
 </candidate_profile>
 
 For EACH job the user sends, return:
-- "match_score": 0-10 — how strong a fit THIS candidate is. BE HARSH; scores are for
-  triage, and a tracker where everything is 7+ is useless. Calibration:
-  · 9-10: rare, tailor-made — security/IAM/detection intern role squarely in their targets,
-    workable location/term, named tech overlaps their stack. At most ~1 in 20 jobs.
-  · 7-8: strong fit they should apply to today (right domain + right level + no blockers).
-  · 5-6: plausible fallback (adjacent domain, or right domain but thin overlap).
-  · 3-4: weak (generic SWE with no security angle, vague posting, mismatched focus).
-  · 0-2: wrong domain/level/location entirely.
-  Hard caps: generic SWE with no security/infra signal ≤ 5; frontend/mobile/product-web/
-  data-science/hardware ≤ 3; unclear-if-intern or non-early-career ≤ 4; description absent
-  (title-only) ≤ 5 — uncertainty is NOT a reason to score high. An 8+ is RESERVED for roles exactly in their
-  lane — security/IAM/identity/detection/OT/DevSecOps intern roles they could realistically
-  get — with named-tech overlap and a workable location/term. Generic SWE never gets 8+,
-  no matter the tech overlap. Expect most jobs in a batch to land 2-5.
+- "match_score": 0-100 — how strong a fit THIS candidate is. BE HARSH; use the FULL range.
+  Scores triage into three tiers by how squarely the role sits in the candidate's actual LANE
+  (their specialties, as evidenced by their real projects, certs, and skills above):
+  · 85-100 = TOP APPLICANT — squarely in-lane; the role's core day-to-day matches a majority of
+    their real projects/certs/skills, right level (intern/new-grad), workable location/term.
+    95+ is rare and tailor-made (≤ ~1 in 25); reserve 85 for a clearly in-lane role.
+  · 70-84 = RECOMMENDED — adjacent, kinda in their lane; a related domain, or an infra/platform/
+    backend role where their specialty is an EXPLICIT part of the mission.
+  · 50-69 = TAKE A LOOK — generic overlap (shared tools/cloud/languages) with no real in-lane
+    angle, or a tangential/unclear posting. Worth a glance, not a priority.
+  · 0-49 = wrong domain, wrong level, wrong location, or no meaningful overlap.
+  HARD CAPS (be strict): generic roles with no EXPLICIT in-lane signal cap at 65 no matter the
+  brand or tech overlap; frontend/mobile/product-web/hardware ≤ 35; unclear-if-intern,
+  non-early-career, or title-only (no description) ≤ 50 — uncertainty is NEVER a reason to
+  score high. Only genuinely in-lane roles that match their projects/certs reach 85+. Expect
+  most jobs in a batch to land 30-65, with 85+ genuinely rare.
 - "match_reason": ≤ 25 words, second person, concrete — point at the specific experience or
-  project that maps ("your Opal/IGA deprovisioning automation at Cloudflare maps directly").
-  If it's a weak fit, say why in the same style.
+  project of theirs that maps to this role. If it's a weak fit, say why in the same style.
 - "skills": the concrete tools/technologies/frameworks/buzzwords the POSTING names
   (e.g. "Terraform", "Splunk", "Kubernetes", "OAuth", "Zero Trust", "CrowdStrike", "Python").
   Only what the posting mentions, ≤ 12 items, canonical capitalization, no duplicates.
-- "likeability": 1-10 — how DESIRABLE the company itself is, independent of fit: typical
-  intern pay tier for this kind of role, prestige/selectivity, brand recognition on a resume.
-  (10 = elite pay+brand like Jane Street/OpenAI; 7-8 = strong tech brand; 5-6 = solid but
-  lesser-known; ≤4 = unknown/low-signal.) Use your knowledge of the company; 5 if unknown.
+- "pay": 1-10 — estimated COMPENSATION level for THIS role, independent of fit: the typical
+  intern/new-grad total pay for this kind of role at this company. (10 = top-of-market like
+  quant/HFT or elite AI; 7-8 = strong big-tech pay; 5-6 = solid median; ≤4 = below-market or
+  unknown-low.) Use your knowledge of the company + role; 5 if genuinely unknown.
 - "company_blurb": ≤ 40 words — what the company actually does, and what this role's team
   likely works on ("Palantir builds data-integration platforms for defense/intel; FDSE
   interns ship customer-facing pipelines and apps on Foundry/Gotham.").
@@ -158,7 +163,7 @@ For EACH job the user sends, return:
 {CAT_GUIDE}
 
 Return ONLY a JSON array, one object per job, same order as sent:
-[{{"i": 0, "match_score": 8, "match_reason": "...", "skills": ["..."], "likeability": 7,
+[{{"i": 0, "match_score": 88, "match_reason": "...", "skills": ["..."], "pay": 7,
   "company_blurb": "...", "categories": ["iam_iga"]}}]
 No markdown, no explanation.`;
 
@@ -204,13 +209,14 @@ export function matchListing(batch: MatchInput[]): string {
 export function normalizeMatchItem(item: Record<string, unknown>, job: MatchInput): MatchResult {
   return {
     id: job.id,
-    match_score: Math.min(10, Math.max(0, Number(item.match_score) || 0)),
+    match_score: Math.min(100, Math.max(0, Math.round(Number(item.match_score) || 0))),
     match_reason: String(item.match_reason ?? "").slice(0, 300),
     skills: Array.isArray(item.skills)
       ? [...new Set(item.skills.map((s) => String(s).slice(0, 40)))].slice(0, 12)
       : [],
-    likeability: Number.isFinite(Number(item.likeability))
-      ? Math.min(10, Math.max(1, Number(item.likeability))) : null,
+    // `pay` (1-10 comp tier) is stored in the legacy `likeability` column.
+    likeability: Number.isFinite(Number(item.pay ?? item.likeability))
+      ? Math.min(10, Math.max(1, Number(item.pay ?? item.likeability))) : null,
     company_blurb: String(item.company_blurb ?? "").slice(0, 400),
     ...(() => {
       const cats = normalizeCategories(item.categories ?? item.category);

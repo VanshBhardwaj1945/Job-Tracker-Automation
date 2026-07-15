@@ -63,6 +63,7 @@ interface JobRow {
   requirements: string;
   phase: string;
   importance: number;
+  bucket: string;
   watchlisted: number;
   term: string;
   likeability: number | null;
@@ -76,7 +77,7 @@ interface JobRow {
 const SORTS: Record<string, string> = {
   // triage order: best personal match first, AI score as fallback signal
   rank: `COALESCE(match_score, -1) DESC, COALESCE(ai_score, -1) DESC,
-         importance DESC, updated_at DESC`,
+         updated_at DESC`,
   updated: "updated_at DESC",
   created: "created_at DESC",
   applied: "applied_at DESC NULLS LAST",
@@ -87,12 +88,12 @@ const SORTS: Record<string, string> = {
 // Triage tiers over Found, by profile match score:
 // top = in your lane (apply first), rec = strong, look = worth a skim.
 const TIER_WHERE: Record<string, string> = {
-  top: "phase = 'found' AND match_score >= 8",
-  rec: "phase = 'found' AND match_score BETWEEN 6 AND 7",
-  look: "phase = 'found' AND match_score BETWEEN 4 AND 5",
+  top: "phase = 'found' AND match_score >= 85",
+  rec: "phase = 'found' AND match_score BETWEEN 70 AND 84",
+  look: "phase = 'found' AND match_score BETWEEN 50 AND 69",
 };
 // legacy alias (digest uses recommended=1): rec-or-better
-const RECOMMENDED_WHERE = "phase = 'found' AND match_score >= 6";
+const RECOMMENDED_WHERE = "phase = 'found' AND match_score >= 70";
 
 // Category taxonomy (tree + labels) — the UI builds its tri-state filter and
 // monochrome pills from this, so there's one source of truth (types.ts).
@@ -151,6 +152,11 @@ api.get("/jobs", async (c) => {
   if (q.min_score) {
     where.push("COALESCE(match_score, ai_score) >= ?");
     binds.push(Number(q.min_score));
+  }
+  // bucket: user-defined favorite lists ("Dream jobs" …). "__any" = starred into any bucket.
+  if (q.bucket) {
+    if (q.bucket === "__any") where.push("bucket != ''");
+    else { where.push("bucket = ?"); binds.push(q.bucket); }
   }
 
   const orderBy = SORTS[q.sort ?? ""] ?? SORTS.rank;
@@ -335,6 +341,7 @@ api.patch("/jobs/:id", async (c) => {
   const editable = [
     "company", "title", "location", "url", "category", "ai_score", "ai_reason",
     "description", "requirements", "phase", "importance", "notes", "applied_at", "watchlisted", "term",
+    "bucket",
   ] as const;
   const sets: string[] = [];
   const binds: unknown[] = [];
@@ -344,6 +351,7 @@ api.patch("/jobs/:id", async (c) => {
     if (f === "phase" && !(PHASES as readonly string[]).includes(String(v))) continue;
     if (f === "category") v = normalizeCategory(v);
     if (f === "importance") v = Math.min(5, Math.max(1, Number(v) || 3));
+    if (f === "bucket") v = String(v ?? "").slice(0, 60);
     sets.push(`${f} = ?`);
     binds.push(v);
   }
@@ -774,7 +782,9 @@ api.get("/stats", async (c) => {
       .all<{ company: string; n: number; applied: number }>(),
     db.prepare("SELECT skills, phase, cat_path FROM jobs WHERE skills != '[]'")
       .all<{ skills: string; phase: string; cat_path: string }>(),
-    db.prepare(`SELECT COALESCE(match_score, -1) AS s, COUNT(*) AS n
+    // match_score 0-100 binned into 10s (0-9, 10-19, … 90-100) for the histogram
+    db.prepare(`SELECT (CASE WHEN match_score IS NULL THEN -1 ELSE MIN(match_score/10, 9) END) AS s,
+                       COUNT(*) AS n
                 FROM jobs GROUP BY s ORDER BY s`)
       .all<{ s: number; n: number }>(),
     db.prepare("SELECT source, COUNT(*) AS n FROM jobs GROUP BY source ORDER BY n DESC")
@@ -842,6 +852,54 @@ api.get("/stats", async (c) => {
       if (re.test(profileText)) { known_skills.push(skill); have.add(k); }
     }
   }
+
+  // ── Deep insights: what your ACTUAL activity (applications) says ──────────
+  const actRows = await db.prepare(
+    "SELECT phase, cat_path, match_score, likeability, applied_at, updated_at FROM jobs"
+  ).all<{ phase: string; cat_path: string; match_score: number | null; likeability: number | null; applied_at: string | null; updated_at: string | null }>();
+  const INTERVIEWED = ["interview", "offer", "accepted"];
+  const nowMs = Date.now(), wk = 7 * 864e5;
+  let appliedN = 0, foundN = 0, mA = 0, mAN = 0, mF = 0, mFN = 0, payA = 0, payAN = 0;
+  let inLane = 0, stale = 0, thisWk = 0, lastWk = 0, interviewed = 0, rejected = 0;
+  const byRoot: Record<string, { applied: number; interviewed: number; rejected: number }> = {};
+  for (const r of actRows.results) {
+    const path = " " + (r.cat_path || "").trim() + " ";
+    if (INTERVIEWED.includes(r.phase)) interviewed++;
+    if (r.phase === "rejected") rejected++;
+    if (r.phase === "found") { foundN++; if (r.match_score != null) { mF += r.match_score; mFN++; } }
+    if (APPLIED_PLUS.includes(r.phase)) {
+      appliedN++;
+      if (r.match_score != null) { mA += r.match_score; mAN++; }
+      if (r.likeability != null) { payA += r.likeability; payAN++; }
+      if (path.includes(" security ")) inLane++;
+      for (const root of ["security", "swe", "other"]) {
+        if (path.includes(" " + root + " ")) {
+          (byRoot[root] ??= { applied: 0, interviewed: 0, rejected: 0 });
+          byRoot[root].applied++;
+          if (INTERVIEWED.includes(r.phase)) byRoot[root].interviewed++;
+          if (r.phase === "rejected") byRoot[root].rejected++;
+        }
+      }
+      if (["applied", "oa"].includes(r.phase) && r.updated_at && nowMs - new Date(r.updated_at).getTime() > 14 * 864e5) stale++;
+      if (r.applied_at) { const age = nowMs - new Date(r.applied_at).getTime();
+        if (age <= wk) thisWk++; else if (age <= 2 * wk) lastWk++; }
+    }
+  }
+  const insights = {
+    applied_total: appliedN,
+    avg_match_applied: mAN ? Math.round(mA / mAN) : null,
+    avg_match_found: mFN ? Math.round(mF / mFN) : null,
+    avg_pay_applied: payAN ? +(payA / payAN).toFixed(1) : null,
+    in_lane_pct: appliedN ? Math.round(100 * inLane / appliedN) : null,
+    followups_due: stale,
+    momentum: { this_week: thisWk, last_week: lastWk },
+    funnel: {
+      found_to_applied: (foundN + appliedN) ? Math.round(100 * appliedN / (foundN + appliedN)) : null,
+      applied_to_interview: appliedN ? Math.round(100 * interviewed / appliedN) : null,
+      applied_to_rejected: appliedN ? Math.round(100 * rejected / appliedN) : null,
+    },
+    by_root: byRoot,
+  };
 
   // ── Claude token usage / spend / cache effectiveness ──
   type URow = {
@@ -944,6 +1002,7 @@ api.get("/stats", async (c) => {
     phases: Object.fromEntries(phases.results.map((r) => [r.phase, r.n])),
     categories: categories.results,
     cat_counts: catCount, // rolled-up per-node totals for the analytics tree
+    insights, // behaviour-driven deep analytics (from your applications)
     weekly: weekly.results.reverse(),
     monthly: monthly.results.reverse(),
     companies: companies.results,

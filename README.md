@@ -14,11 +14,11 @@
 
 The dashboard (dark, Linear-inspired, installable as a PWA). Job/company data is blurred for privacy.
 
-**Tracker** — every found role, AI-matched, tagged into a **multi-level category taxonomy** (a job can live in several categories at once), and triaged into apply-now tiers. Filter with a **tri-state category tree** — tick a parent to select its whole subtree, untick one child and the rest stay:
+**Tracker** — every found role, **AI-matched on a 0–100 scale** and triaged into apply-now tiers (Top ≥85 / Recommended ≥70 / Take a look ≥50), with an estimated **Pay** tier, tagged into a **multi-level category taxonomy** (a job can live in several categories at once). Star any role into **your own favorite buckets** ("Dream jobs", …). Filter with a **tri-state category tree**, a bucket viewer, and a **light/dark toggle**:
 
 <img src="docs/screenshots/dashboard-tracker.png" width="900" alt="Tracker">
 
-**Analytics** — pipeline funnel, category mix, and a **tools & buzzwords** view you can scope through a **hierarchical category tree** (*all jobs / applied / any level of the taxonomy*), split into what you **already have vs should learn** (missing) against your own skill list — which **auto-updates** from your synced profile. Plus a **cost center**: spend-over-time you can toggle by provider (Claude / Cloudflare / Azure or any mix) to spot spikes, alongside live token usage and prompt-cache hit rate:
+**Analytics** — a **deep-insights** panel that reads your *actual behaviour* (not just pipeline counts): fit quality of what you apply to, in-lane focus, pay you're targeting, follow-ups going stale, weekly momentum, conversion rates, and outcomes by lane. Plus a **tools & buzzwords** view scoped through a **hierarchical category tree** (have vs should-learn, auto-updated from your profile), a **cost center** (spend over time by provider), and a **drag-to-reorder / resizable dashboard** you can lay out however you want:
 
 <img src="docs/screenshots/dashboard-analytics.png" width="900" alt="Analytics">
 
@@ -36,7 +36,8 @@ A production-shaped, serverless, AI-driven system — not a tutorial. Every piec
 - **Zero-trust auth**: Cloudflare Access in front of the app; the Worker independently verifies the signed **JWT** (audience + issuer + RS256 signature) and enforces the owner identity as defense-in-depth.
 - **Infrastructure as Code**: the entire cloud footprint (Worker, D1, R2, DNS, Access policies, service tokens) is defined in **Terraform** — reproducible, reviewable, one `apply`.
 - **Event-driven automation**: scheduled **GitHub Actions** workflows scrape job boards, watch email over IMAP, and sync data through the API with least-privilege **service tokens**.
-- **Applied LLM engineering**: profile-aware job matching, structured extraction, and per-job document generation using Claude — with **prompt caching**, a **daily spend guardrail**, and the **Message Batches API** to keep cost low.
+- **Applied LLM engineering**: profile-aware **0–100 job matching** (with a harsh, lane-calibrated rubric), structured extraction, and per-job document generation using Claude — with **prompt caching** that keeps a mid-tier model (Sonnet) close to entry-tier cost, a **daily spend guardrail**, and the **Message Batches API**.
+- **Behaviour-driven analytics**: the dashboard mines your own application history (fit quality, focus, conversion, momentum, follow-ups) — turning a tracker into a feedback loop, not just a list.
 - **Hierarchical data modeling**: a parent→mid→leaf **category taxonomy** where the AI tags the deepest leaves and everything **rolls up** — one SQL-`LIKE` ancestor-closure column powers tree filters and analytics at any level, so a job in *SRE* also counts under *Infra/Platform* and *SWE*.
 
 ## Stack
