@@ -32,7 +32,7 @@
     /* text (step 11-12): low / high contrast */
     --text: #f2f3f5; --muted: #8a8f98; --dim: #62666d;
     /* accent (step 9-10) */
-    --accent: #5e6ad2; --accent2: #7c8aff; --accent-soft: rgba(94,106,210,.14);
+    --accent: #2e7df6; --accent2: #5ba3ff; --accent-soft: rgba(46,125,246,.14);
     --indigo: #6e79d6; --violet: #9b8cf0; --cyan: #56b6d8; --green: #4cb782;
     --amber: #efc75e; --red: #eb5757; --pink: #e06fae; --blue: #6493e6;
     --grad: var(--accent);
@@ -70,7 +70,7 @@
     --codebg: rgba(15,23,38,.055);
     --reason: #2f7d57;
     --title-c: #1a1e25;
-    --accent: #5560cf; --accent2: #4a55c4; --accent-soft: rgba(85,96,207,.10);
+    --accent: #2570e8; --accent2: #1f64d6; --accent-soft: rgba(37,112,232,.10);
     --green: #1f9d63; --amber: #b7841c; --red: #d23b3b;
     --bbar: rgba(250,250,252,.94);
     --shadow-sm: 0 1px 2px rgba(15,20,30,.06);
@@ -95,7 +95,7 @@
   }
   /* tabular, aligned numerals for tables + metrics */
   .num, .kpi .num, td, th, .bar .val, .match, .n, .runrow .date, .artrow .ev { font-feature-settings: var(--tnum); }
-  ::selection { background: rgba(94,106,210,.4); }
+  ::selection { background: rgba(46,125,246,.4); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-thumb { background: var(--scrollthumb); border-radius: 6px; border: 3px solid var(--bg); }
   ::-webkit-scrollbar-thumb:hover { filter: brightness(1.2); }
@@ -162,10 +162,11 @@
   }
   .logo { display: flex; align-items: center; gap: 10px; padding: 8px 8px 18px; }
   .logo .mark {
-    width: 28px; height: 28px; border-radius: 7px; background: var(--accent);
+    width: 28px; height: 28px; border-radius: 7px; background: #0d1320;
+    box-shadow: inset 0 0 0 1px rgba(46,125,246,.35);
     display: grid; place-items: center; color: #fff; flex: none;
   }
-  .logo .mark svg { width: 16px; height: 16px; }
+  .logo .mark svg { width: 22px; height: 22px; }
   .logo b { font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
   .logo small { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
   .nav {
@@ -176,7 +177,7 @@
   }
   .nav:hover { color: var(--text); background: var(--surface2); }
   /* active nav: accent-tinted, with a short accent rail on the left — reads intentional, not just "greyed" */
-  .nav.active { color: var(--text); background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(94,106,210,.22); }
+  .nav.active { color: var(--text); background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(46,125,246,.22); }
   .nav.active .ic { color: var(--accent2); }
   .nav.active::before { content: ""; position: absolute; left: -9px; top: 50%; transform: translateY(-50%);
     width: 3px; height: 15px; border-radius: 3px; background: var(--accent2); }
@@ -211,7 +212,7 @@
   /* primary: subtle top-lit gradient + inset highlight = a button with depth, not a flat fill */
   button.primary { background: linear-gradient(180deg, var(--accent2), var(--accent)); border-color: transparent;
     color: #fff; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 1px 2px rgba(0,0,0,.35); }
-  button.primary:hover { background: linear-gradient(180deg, #8b97ff, var(--accent2)); }
+  button.primary:hover { background: linear-gradient(180deg, #78b4ff, var(--accent2)); }
   button.primary:active { box-shadow: inset 0 1px 3px rgba(0,0,0,.3); }
   button.danger { color: var(--red); }
   button.danger:hover { border-color: rgba(235,87,87,.45); background: rgba(235,87,87,.08); }
@@ -292,7 +293,7 @@
          user-select: none; white-space: nowrap; font-weight: 500; font-size: 12.5px;
          transition: background .12s var(--ease), color .12s var(--ease); }
   .tab:hover { color: var(--text); background: var(--surface2); }
-  .tab.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px rgba(94,106,210,.28); }
+  .tab.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px rgba(46,125,246,.28); }
   .tab.active .n { opacity: .85; color: var(--accent2); }
   .tab .n { font-size: 10.5px; opacity: .6; margin-left: 5px; }
   /* z-index 45: the riseIn animation (fill:both) makes .filters and .tablecard
@@ -544,7 +545,7 @@
   textarea { width: 100%; resize: vertical; }
   .chatlog { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
   .msg { border-radius: 12px; padding: 10px 14px; font-size: 13px; max-width: 100%; }
-  .msg.user { background: var(--accent-soft); border: 1px solid rgba(94,106,210,.3); align-self: flex-end; max-width: 85%; }
+  .msg.user { background: var(--accent-soft); border: 1px solid rgba(46,125,246,.3); align-self: flex-end; max-width: 85%; }
   .msg.ai { background: var(--surface2); border: 1px solid var(--stroke); }
   .msg.ai .rendered { font-size: 13px; line-height: 1.55; color: #d7dce4; }
   .msg.ai .rendered h4 { margin: 12px 0 5px; font-size: 12.5px; font-weight: 700; color: var(--text);
@@ -679,7 +680,14 @@
   <aside>
     <div class="logo">
       <div class="mark">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4 13.5 10 19 20 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 512 512" fill="none"><defs><linearGradient id="jgm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4da3ff"/><stop offset="1" stop-color="#1f6ae0"/></linearGradient></defs>
+<g fill="none" stroke="url(#jgm)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+<path d="M 225.6 105.0 Q 262.0 84.0 298.4 105.0 L 357.3 139.0 Q 393.6 160.0 393.6 202.0 L 393.6 270.0 Q 393.6 312.0 357.3 333.0 L 298.4 367.0 Q 262.0 388.0 220.0 388.0 L 88.0 388.0"/><path d="M 130.4 248.0 L 130.4 202.0 Q 130.4 160.0 166.7 139.0 L 225.6 105.0"/>
+<line x1="122" y1="322" x2="188" y2="322" stroke-width="30"/>
+<line x1="94" y1="370" x2="150" y2="370" stroke-width="30"/>
+<line x1="300.1" y1="214.0" x2="359.0" y2="180.0" stroke-width="24"/>
+</g>
+<circle cx="262" cy="236" r="27" fill="none" stroke="url(#jgm)" stroke-width="22"/></svg>
       </div>
       <div><b>Job Tracker</b><small>example.com</small></div>
     </div>
