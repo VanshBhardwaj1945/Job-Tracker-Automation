@@ -24,8 +24,8 @@ From the posting below, extract:
 - company: employer name (not the job board)
 - title: job title
 - location: location(s), short (e.g. "Austin, TX" or "Remote, USA")
-- description: the role description — responsibilities, team, what you'd do. Keep the original wording, trimmed of boilerplate (EEO statements, benefits blurbs, "about us" fluff). Markdown allowed.
-- requirements: the qualifications/requirements section (required + preferred). Keep original wording. Markdown allowed.
+- description: the role description — responsibilities, team, what you'd do. Keep the original wording, trimmed of boilerplate (EEO statements, benefits blurbs, "about us" fluff). Preserve list/bullet structure as markdown "- " bullets. Markdown allowed.
+- requirements: the qualifications/requirements. Capture EVERY qualifications-style section — "Requirements", "Qualifications", "Basic/Minimum/Preferred Qualifications", "What we're looking for", "You have", "Must have", "Nice to have", "Skills". Keep original wording as "- " bullets. This should almost NEVER be empty for a real posting — if the posting lists any skills/experience/education expectations, they belong here.
 - category: "security" (security/cyber/IAM/identity/detection roles), "relevant_swe" (cloud/DevOps/SRE/infra/platform/backend), or "other_swe" (everything else)
 - term: the internship term/season if stated, formatted "Summer 2027" (comma-separate if several, e.g. "Fall 2026, Spring 2027"; "" if not stated)
 
@@ -143,7 +143,7 @@ async function fetchWorkdayJson(url: string): Promise<string | null> {
   const body = (await res.json()) as { jobPostingInfo?: { jobDescription?: string } };
   const html = body.jobPostingInfo?.jobDescription ?? "";
   if (!html) return null;
-  return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  return htmlToMarkdown(html);
 }
 
 /** Ashby postings are JS-rendered, but the public job-board API isn't. */
@@ -159,23 +159,105 @@ async function fetchAshbyJson(url: string): Promise<string | null> {
   const job = (body.jobs ?? []).find((j) => j.id === jobId);
   const html = job?.descriptionHtml || job?.description || "";
   if (!html) return null;
-  return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  return htmlToMarkdown(html);
 }
 
-/** Fetch a job posting URL and reduce it to text. Many boards (LinkedIn!) block
- *  server-side fetches — callers should surface a "paste the description" hint. */
+/** Greenhouse: board API returns the FULL posting as escaped HTML. */
+async function fetchGreenhouseJson(url: string): Promise<string | null> {
+  const m = url.match(/^https?:\/\/(?:boards|job-boards)\.greenhouse\.io\/(?:embed\/job_app\?for=)?([\w-]+)\/jobs\/(\d+)/i)
+    || url.match(/greenhouse\.io\/([\w-]+)[^?]*[?&]gh_jid=(\d+)/i);
+  if (!m) return null;
+  const [, org, id] = m;
+  const res = await fetch(`https://boards-api.greenhouse.io/v1/boards/${org}/jobs/${id}?questions=false`, {
+    headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { content?: string };
+  if (!body.content) return null;
+  return htmlToMarkdown(decodeEntities(body.content));
+}
+
+/** Lever: postings API returns description text + structured lists. */
+async function fetchLeverJson(url: string): Promise<string | null> {
+  const m = url.match(/^https?:\/\/jobs\.lever\.co\/([^/]+)\/([0-9a-f-]{20,})/i);
+  if (!m) return null;
+  const [, org, id] = m;
+  const res = await fetch(`https://api.lever.co/v0/postings/${org}/${id}`, {
+    headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) return null;
+  const j = (await res.json()) as { description?: string; lists?: Array<{ text?: string; content?: string }>; additional?: string };
+  const parts = [
+    j.description,
+    ...(j.lists ?? []).map((l) => (l.text ? `\n${l.text}\n` : "") + (l.content ?? "")),
+    j.additional,
+  ].filter(Boolean).join("\n");
+  const md = htmlToMarkdown(parts);
+  return md.length >= 200 ? md : null;
+}
+
+/** Decode common HTML entities (named + numeric). */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"').replace(/&#0?39;|&apos;|&rsquo;/gi, "'")
+    .replace(/&ldquo;|&rdquo;/gi, '"').replace(/&mdash;|&ndash;|&bull;/gi, "-")
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)));
+}
+
+/** HTML → structure-preserving markdown: <li> → "- " bullets, block elements →
+ *  line breaks, headings → blank lines. Lets the AI find the Requirements
+ *  section and makes stored text render as real lists (not a flattened wall). */
+export function htmlToMarkdown(html: string): string {
+  let s = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<h[1-6][^>]*>/gi, "\n\n").replace(/<\/h[1-6]>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "\n- ").replace(/<\/li>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|ul|ol|tr|section|article)>/gi, "\n")
+    .replace(/<(p|div|ul|ol|table|section|article)[^>]*>/gi, "\n");
+  s = decodeEntities(s.replace(/<[^>]+>/g, " "));
+  s = s.split("\n").map((l) => l.replace(/[ \t]+/g, " ").trim()).join("\n");
+  return s.replace(/\n{3,}/g, "\n\n").replace(/(?:^|\n)- (?=\n|$)/g, "").trim();
+}
+
+/** Pull a JobPosting from a page's JSON-LD (schema.org). Most boards embed the
+ *  FULL, clean description here even when the visible page is JS-rendered. */
+export function extractJsonLd(html: string): string | null {
+  const blocks = html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  for (const b of blocks) {
+    let data: any;
+    try { data = JSON.parse(b[1].trim()); } catch { continue; }
+    const candidates: any[] = Array.isArray(data) ? data : data["@graph"] ? data["@graph"] : [data];
+    for (const c of candidates) {
+      const type = c && c["@type"];
+      const isJob = type === "JobPosting" || (Array.isArray(type) && type.includes("JobPosting"));
+      if (!isJob) continue;
+      const parts = [c.description, c.responsibilities, c.qualifications, c.skills, c.experienceRequirements]
+        .filter((x) => typeof x === "string" && x.length > 20);
+      if (!parts.length) continue;
+      const md = htmlToMarkdown(parts.join("\n\n"));
+      if (md.length >= 200) return md;
+    }
+  }
+  return null;
+}
+
+/** Fetch a job posting URL and reduce it to STRUCTURED markdown. Order: board
+ *  JSON APIs (clean + complete) → JSON-LD in the page → structured HTML parse. */
 export async function fetchUrlText(rawUrl: string): Promise<string> {
   if (!/^https?:\/\//i.test(rawUrl)) throw new Error("only http(s) URLs are supported");
   const url = normalizePostingUrl(rawUrl);
-  // JS-rendered boards with a JSON API behind them — try that first.
-  try {
-    const wd = await fetchWorkdayJson(url);
-    if (wd && wd.length >= 300) return wd;
-  } catch { /* fall through */ }
-  try {
-    const ash = await fetchAshbyJson(url);
-    if (ash && ash.length >= 300) return ash;
-  } catch { /* fall through to plain fetch */ }
+  // 1) Boards with a clean JSON API behind the JS page — best source.
+  for (const fetcher of [fetchWorkdayJson, fetchAshbyJson, fetchGreenhouseJson, fetchLeverJson]) {
+    try {
+      const out = await fetcher(url);
+      if (out && out.length >= 250) return out;
+    } catch { /* try next */ }
+  }
   const res = await fetch(url, {
     headers: {
       "User-Agent":
@@ -187,18 +269,11 @@ export async function fetchUrlText(rawUrl: string): Promise<string> {
   });
   if (!res.ok) throw new Error(`Fetch failed with HTTP ${res.status}`);
   const html = await res.text();
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#\d+;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (text.length < 300) {
+  // 2) JSON-LD first (complete), then structure-preserving HTML.
+  const ld = extractJsonLd(html);
+  if (ld && ld.length >= 250) return ld;
+  const text = htmlToMarkdown(html);
+  if (text.length < 250) {
     throw new Error("Page returned too little text (likely bot-blocked)");
   }
   return text;
