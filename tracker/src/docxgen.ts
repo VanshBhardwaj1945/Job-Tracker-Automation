@@ -126,8 +126,9 @@ export function markdownToParagraphs(md: string): Paragraph[] {
       continue;
     }
 
-    // Up to two header lines after the name: headline, then contact (has @ or digits)
-    if (seenName && section === "" && headerLines < 2 && /[|@]/.test(line) && !/^#/.test(line)) {
+    // Up to two header lines after the name: headline (any single phrase), then
+    // contact (has @/phone). No "|" required — a headline can be one plain phrase.
+    if (seenName && section === "" && headerLines < 2 && !/^#/.test(line)) {
       const isContact = /@|\(\d{3}\)|\d{3}[-.\s]\d{4}/.test(line);
       paras.push(new Paragraph({
         alignment: AlignmentType.CENTER,

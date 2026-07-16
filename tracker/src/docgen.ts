@@ -126,6 +126,10 @@ portfolio). Before writing, build your own assessment:
 - Certifications are inventory too: reorder so the role-relevant one leads; drop ones that buy
   nothing for this posting.
 - If materials and these instructions ever disagree about what they did, THE MATERIALS WIN.
+- ROLE-TITLE FRAMING: where the materials support more than one accurate title for the same real
+  work (e.g. "Software Engineer" vs "Security Engineer" vs "IAM Engineer" for one role), pick the
+  truthful title closest to the target posting. This reframes the SAME work — never invents a
+  different job; keep the team/scope accurate.
 
 2. STRUCTURE (exact — a converter renders the visual template):
 - Line 1: "# Full Name"
@@ -141,7 +145,10 @@ portfolio). Before writing, build your own assessment:
 - Project entry: "### Name | Mon YYYY - Mon YYYY" then one comma-separated tech-stack line then bullets.
 - CERTIFICATIONS: ONE flowing line (no bullets): "Name (CODE), Mon YYYY | Name (CODE), Mon YYYY".
 - EDUCATION: school line with degree and dates. Coursework line ONLY if the posting asks about coursework or GPA.
-- SKILLS: "- **Category:** comma, separated, items" lines.
+- SKILLS: "- **Category:** comma, separated, items" lines. MANDATORY and always present — under
+  space pressure shrink to fewer categories or shorter lists, NEVER omit it.
+- ALL FIVE sections (EXPERIENCE, PROJECTS, CERTIFICATIONS, EDUCATION, SKILLS) appear in EVERY resume.
+  Dropping a whole section to fit is a failure — cut bullets or a project instead.
 
 3. HARD FORMAT LAWS (zero exceptions):
 - Dates: "Mon YYYY - Mon YYYY", "Mon YYYY - Present", "expected Mon YYYY". Three-letter month, NO
@@ -164,8 +171,9 @@ but NEVER exceed one page. Every line must answer: does this move THIS applicati
 - If UNDER 40 lines: expand bullets on the strongest in-lane entries or add the next most relevant
   project — never pad with fluff, never leave the page half empty.
 - Cut order when over budget: coursework, least-relevant cert, weakest adjacent project, 3rd/4th
-  bullets on older roles, a borderline not-yet-started role. NEVER cut the strongest in-lane role
-  below 3 bullets, contact info, the headline, or dates.
+  bullets on older roles, a borderline not-yet-started role. NEVER cut: any of the five sections
+  (SKILLS included — trim its lists, do not remove it), the strongest in-lane role below 3 bullets,
+  contact info, the headline, or dates.
 
 5. LANGUAGE LAWS — dry, dense, factual:
 Every bullet: strongest verb + what was built + how + measurable outcome. Nothing else.
@@ -328,7 +336,7 @@ export async function docChat(
     const lc = estimateResumeLines(first);
     if (lc > 48 || lc < 36) {
       const note = lc > 48
-        ? `That draft is ~${lc} rendered lines — it OVERFLOWS one page. Cut it to 42-46 lines using the cut order in your instructions. Keep every remaining entry at >= 2 bullets and keep reverse-chronological order. Output the FULL corrected resume.`
+        ? `That draft is ~${lc} rendered lines — it OVERFLOWS one page. Cut to 42-46 lines using the cut order (drop the weakest project/bullets, shrink SKILLS lists). Keep ALL FIVE sections including SKILLS, every remaining entry at >= 2 bullets, and reverse-chronological order. Output the FULL corrected resume.`
         : `That draft is only ~${lc} rendered lines — it under-fills the page. Expand bullets on the strongest in-lane entries or add the next most relevant project (>= 2 bullets) until it nearly fills one page. No fluff. Output the FULL corrected resume.`;
       return await runDocTurn(env, db, kind, materials, task, [
         ...turns,
