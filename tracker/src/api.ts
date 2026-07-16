@@ -526,7 +526,7 @@ async function docRoute(c: any, rawKind: string) {
       c.env, c.env.DB, kind,
       { company: job.company, title: job.title, location: job.location, term: job.term,
         description: job.description, requirements: job.requirements,
-        match_reason: job.match_reason, skills: job.skills },
+        match_reason: job.match_reason, skills: job.skills, url: job.url },
       messages,
       (b.master_override ?? "").trim() || undefined
     );
@@ -551,7 +551,7 @@ api.post("/jobs/:id/doc-prompt/:kind", async (c) => {
       c.env, c.env.DB, kind as GenKind,
       { company: job.company, title: job.title, location: job.location, term: job.term,
         description: job.description, requirements: job.requirements,
-        match_reason: job.match_reason, skills: job.skills },
+        match_reason: job.match_reason, skills: job.skills, url: job.url },
       (b.master_override ?? "").trim() || undefined
     );
     return c.json({ prompt });

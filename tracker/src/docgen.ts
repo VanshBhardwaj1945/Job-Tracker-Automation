@@ -26,7 +26,26 @@ interface JobCtx {
   requirements: string;
   match_reason: string;
   skills: string;
+  url?: string;
 }
+
+/** Which ATS vendor the posting lives on — drives strictness rules in the
+ *  resume prompt and the "upload DOCX + check parsed fields" advice. */
+export function detectATS(url: string | undefined | null): string {
+  const u = (url || "").toLowerCase();
+  if (!u) return "unknown";
+  if (u.includes("greenhouse.io")) return "greenhouse";
+  if (u.includes("myworkdayjobs.com") || u.includes("workday")) return "workday";
+  if (u.includes("lever.co")) return "lever";
+  if (u.includes("ashbyhq.com")) return "ashby";
+  if (u.includes("icims.com")) return "icims";
+  if (u.includes("taleo.net")) return "taleo";
+  if (u.includes("smartrecruiters.com")) return "smartrecruiters";
+  if (u.includes("bamboohr.com")) return "bamboohr";
+  if (u.includes("linkedin.com")) return "linkedin-easy-apply";
+  return "unknown";
+}
+
 
 let ghCache: { text: string; at: number } | null = null;
 let siteCache: { text: string; at: number } | null = null;
@@ -88,42 +107,89 @@ No fluff, no filler adjectives. After the first draft, the user may ask for twea
 always output the FULL updated document each time, not a diff.`;
 
 const INSTRUCTIONS: Record<GenKind, string> = {
-  resume: `You are the candidate's resume writer. Produce a FULL, one-page resume TAILORED to the job below.
+  resume: `You are the candidate's resume writer. Produce a FULL one-page resume TAILORED to the job below.
+Three readers must be satisfied at once: an ATS parser (reads structure), a hiring manager skimming
+for ~7 seconds (reads hierarchy), and an AI screener (reads the raw text as prose). Target scores:
+ATS >= 9.5, Human >= 9, AI >= 9 — you self-score all three in the trailer.
 
-Output EXACTLY this markdown structure (a downstream converter turns it into a formatted
-one-page Word doc, so the structure must be precise):
+1. ASSESS THE MATERIALS FIRST (no pre-ranked inventory — you decide):
+Everything you may use is in the candidate materials above (resume, any knowledge base, GitHub,
+portfolio). Before writing, build your own assessment:
+- For each role/project: note its stack, its depth of real detail, and its term-overlap with THIS
+  posting's requirements. Strength = evidence density x relevance to this job — not order of
+  appearance, not prestige, not anything in these instructions.
+- Roles that have NOT started yet (check dates against today): including them is YOUR judgment
+  call, decided by lane fit. If included: "(Incoming)" in the title, strictly future tense, 2
+  bullets max, never framed as completed work. State the include/omit decision in the trailer.
+- Published/shipped artifacts (anything people can install or visit) are shipping proof and count
+  for ANY engineering role, even off-lane.
+- Certifications are inventory too: reorder so the role-relevant one leads; drop ones that buy
+  nothing for this posting.
+- If materials and these instructions ever disagree about what they did, THE MATERIALS WIN.
+
+2. STRUCTURE (exact — a converter renders the visual template):
 - Line 1: "# Full Name"
-- Line 2: the contact line, pipe-separated: "Austin, TX | email | phone | github-url | linkedin-url"
-- Each section: "## SECTION NAME" — EXPERIENCE, then PROJECTS & LABS, then EDUCATION, then SKILLS.
-  NO summary, objective, or profile section — start straight into EXPERIENCE.
-- Each experience entry:
-    "### Organization Name"
-    "Role Title | Start – End Dates"          (role, then a pipe, then the dates)
-    "- bullet"  ("- " bullets, one per line)
-- Each project entry:
-    "### Project Name | Dates"
-    "Tech · Stack · Separated · By · Middots"   (the tech line — use " · " between items)
-    "- bullet"
-- SKILLS: a few "- **Category:** comma, separated, list" lines (bold each category label).
+- Line 2: headline — 4-7 words classifying the candidate for THIS role, built from the posting's
+  own title vocabulary.
+- Line 3: the contact line, verbatim from the resume, pipe-separated.
+- Then EXACTLY these sections, these names, this order: "## EXPERIENCE", "## PROJECTS",
+  "## CERTIFICATIONS", "## EDUCATION", "## SKILLS". Never rename, reorder, or add a summary.
+- Experience entry: "### Company" then "Role Title | Mon YYYY - Mon YYYY" then "- " bullets.
+- HARD RULE — CHRONOLOGY: EXPERIENCE entries in strict reverse-chronological order by START date.
+  NEVER reorder by relevance — an included incoming role has the latest start date and sits on TOP.
+  Tailor with bullet allocation and content, never with order. PROJECTS likewise newest-first.
+- Project entry: "### Name | Mon YYYY - Mon YYYY" then one comma-separated tech-stack line then bullets.
+- CERTIFICATIONS: ONE flowing line (no bullets): "Name (CODE), Mon YYYY | Name (CODE), Mon YYYY".
+- EDUCATION: school line with degree and dates. Coursework line ONLY if the posting asks about coursework or GPA.
+- SKILLS: "- **Category:** comma, separated, items" lines.
 
-Rules:
-- NO SUMMARY / OBJECTIVE. Never pad with a profile paragraph — fill the page with real
-  accomplishment bullets instead.
-- DENSITY: every experience entry gets 3-5 substantive bullets; every project gets 2-3
-  substantive bullets. NEVER leave an entry with a single bullet. Each bullet is a full,
-  concrete accomplishment (what you built + how + impact/scale), like:
-  "Enforced Zero Trust via Cloudflare Access (email OTP) in front of an origin with no native
-  auth, and rate-limited APIs to prevent abuse — least-privilege access control managed entirely
-  as Terraform IaC."
-- Fill exactly ONE page: include enough experience + projects (3-4 projects if needed) with
-  full bullets so the page is full WITHOUT a summary. If short, add another relevant project or
-  more bullets — do not shrink to fit or pad with fluff.
-- TAILOR by ordering and emphasis: lead with the most relevant experience/projects and mirror
-  the posting's keywords where truthful — but keep every entry substantive even if it's a
-  secondary match. Quantify where the source material does.
-- Keep the real contact details from the master resume.
-- After the resume, add a section "## WHY THIS RESUME" — 4-6 short "- " bullets on the tailoring
-  choices. (The converter drops this from the Word doc; it's just for you to review.)
+3. HARD FORMAT LAWS (zero exceptions):
+- Dates: "Mon YYYY - Mon YYYY", "Mon YYYY - Present", "expected Mon YYYY". Three-letter month, NO
+  period, plain hyphen with spaces, 4-digit year. Never day numbers, ordinals, seasons, or a bare
+  month. ONE format document-wide.
+- ASCII only: no arrows, no curly quotes, no em/en dashes inside text, no middots — commas and
+  straight quotes. Never hidden text or keyword stuffing (AI screeners detect it; it ends the application).
+- Keywords: acronym + long form once each for load-bearing terms, e.g. "Identity and Access
+  Management (IAM)", "infrastructure as code (IaC)", "role-based access control (RBAC)".
+
+4. THE LINE-BUDGET BRAIN (where you think):
+The page holds ~46 rendered lines. Budget BEFORE writing. Fill the page nearly full (42-46 lines)
+but NEVER exceed one page. Every line must answer: does this move THIS application? Reason like:
+"cert X buys nothing for this role — drop it; project Y hits three of their requirements — 3 bullets."
+- Any employer or project that appears gets >= 2 bullets. NO EXCEPTIONS. If it cannot justify 2
+  bullets for this role, cut the whole entry — a starved entry reads worse than an absent one.
+- The skills category matching the role gets FULL truthful depth; adjacent categories keep only
+  what supports the story; irrelevant categories vanish.
+- Projects chosen by stack overlap with the posting's requirements — most exact-term hits win.
+- If UNDER 40 lines: expand bullets on the strongest in-lane entries or add the next most relevant
+  project — never pad with fluff, never leave the page half empty.
+- Cut order when over budget: coursework, least-relevant cert, weakest adjacent project, 3rd/4th
+  bullets on older roles, a borderline not-yet-started role. NEVER cut the strongest in-lane role
+  below 3 bullets, contact info, the headline, or dates.
+
+5. LANGUAGE LAWS — dry, dense, factual:
+Every bullet: strongest verb + what was built + how + measurable outcome. Nothing else.
+- Banned: "passionate", "results-driven", "dynamic", "responsible for", "helped with", "worked on",
+  "various", "utilized", "leveraged", "cutting-edge", "spearheaded", intensifiers, and any adjective
+  a skeptic could delete without losing information. If a sentence survives with a word removed, remove it.
+- <= ~30 words / 2 rendered lines per bullet. No bullet restates another bullet or the skills list.
+- Mirror the posting's EXACT phrases where truthful — their vocabulary, real facts. If they name a
+  tool the candidate does not have, it does NOT appear.
+The finished document reads like an engineering changelog written by someone confident enough not to decorate it.
+
+6. ATS ROUTING (an "ATS:" hint accompanies the job, derived from the posting URL):
+- workday / icims / taleo: strictest mode — plainest punctuation everywhere; add to the trailer:
+  "Upload the DOCX to this portal, then CHECK the parsed fields it shows you and fix any mangled ones."
+- greenhouse / lever / ashby: recruiters open the original document — visual polish pays; PDF is fine.
+- unknown: assume strictest.
+
+7. TRUTH LAW (above everything): only real facts from the materials. Never invent experience, tools,
+metrics, dates, or credentials. When in doubt whether they did something — they did not.
+
+8. THE TRAILER — end with "## WHY THIS RESUME" (the converter strips it):
+(a) self-score ATS x/10, Human x/10, AI x/10 with one-line justifications; (b) the exact posting
+phrases you mirrored, quoted; (c) the cut log; (d) the include/omit decision on any not-yet-started
+role; (e) portal upload advice per section 6.
 ${COMMON}`,
 
   cover_letter: `You are the candidate's cover-letter writer. Produce a cover letter TAILORED to the job below,
@@ -205,6 +271,8 @@ async function assembleContext(
     `Company: ${job.company}`,
     `Title: ${job.title}`,
     `Location: ${job.location || "?"}${job.term ? ` · Term: ${job.term}` : ""}`,
+    `ATS: ${detectATS(job.url)}`,
+    `Today's date: ${new Date().toISOString().slice(0, 10)}`,
     job.match_reason ? `Fit note: ${job.match_reason}` : "",
     job.skills && job.skills !== "[]" ? `Posting keywords: ${job.skills}` : "",
     job.description ? `\nDescription:\n${job.description.slice(0, 6000)}` : "",
@@ -223,6 +291,25 @@ export async function buildDocPrompt(
   return `${materials}\n\n${task}\n\n${FIRST_TURN[kind]}`;
 }
 
+/** Estimate rendered lines of a resume in the Cambria/Letter template
+ *  (10pt, ~7.5in text width ~ 110 chars/line). Deterministic stand-in for
+ *  "does this fit one page" — the model can't count rendered lines, we can. */
+export function estimateResumeLines(md: string): number {
+  const cut = md.search(/^#{0,4}\s*(\*\*)?\s*why this /im);
+  const lines = (cut >= 0 ? md.slice(0, cut) : md).split("\n");
+  let n = 0;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (/^#\s/.test(line)) { n += 2; continue; }
+    if (/^##\s/.test(line)) { n += 2; continue; }
+    if (/^###\s/.test(line)) { continue; }
+    const text = line.replace(/^[-*\u2022]\s+/, "").replace(/\*\*/g, "");
+    n += Math.max(1, Math.ceil(text.length / 110));
+  }
+  return n;
+}
+
 export async function docChat(
   env: Env,
   db: D1Database,
@@ -231,20 +318,42 @@ export async function docChat(
   messages: ChatMessage[],
   masterOverride?: string
 ): Promise<string> {
-  // Spend guardrail: Opus doc-gen is a click away, so cap daily API spend.
-  // Cap lives in meta (doc_daily_cap_usd) so you can tune it without a deploy.
+  const { materials, task } = await assembleContext(env, db, kind, job, masterOverride);
+  const turns: ChatMessage[] = messages.length ? messages : [{ role: "user", content: FIRST_TURN[kind] }];
+  const first = await runDocTurn(env, db, kind, materials, task, turns);
+
+  // Page-fit auto-revision (resume only, first draft only): the model can't count
+  // rendered lines but we can. One corrective turn when a fresh draft over/under-fills.
+  if (kind === "resume" && messages.length === 0) {
+    const lc = estimateResumeLines(first);
+    if (lc > 48 || lc < 36) {
+      const note = lc > 48
+        ? `That draft is ~${lc} rendered lines — it OVERFLOWS one page. Cut it to 42-46 lines using the cut order in your instructions. Keep every remaining entry at >= 2 bullets and keep reverse-chronological order. Output the FULL corrected resume.`
+        : `That draft is only ~${lc} rendered lines — it under-fills the page. Expand bullets on the strongest in-lane entries or add the next most relevant project (>= 2 bullets) until it nearly fills one page. No fluff. Output the FULL corrected resume.`;
+      return await runDocTurn(env, db, kind, materials, task, [
+        ...turns,
+        { role: "assistant", content: first },
+        { role: "user", content: note },
+      ]);
+    }
+  }
+  return first;
+}
+
+async function runDocTurn(
+  env: Env, db: D1Database, kind: GenKind, materials: string, task: string, turns: ChatMessage[]
+): Promise<string> {
+  // Spend guardrail: cap daily API spend (docs only).
   const capRow = await db.prepare("SELECT value FROM meta WHERE key = 'doc_daily_cap_usd'")
     .first<{ value: string }>();
   const cap = Number(capRow?.value) || DEFAULT_DAILY_CAP_USD;
-  const spentToday = await costToday(db, "doc_%");  // docs only — a big rematch shouldn't lock out resumes
+  const spentToday = await costToday(db, "doc_%");
   if (spentToday >= cap) {
     throw new Error(
       `Daily AI spend cap reached ($${spentToday.toFixed(2)} / $${cap.toFixed(2)}). ` +
       `Raise it in Settings, or use the "Copy prompt for Claude.ai" button to generate on your Pro plan.`
     );
   }
-
-  const { materials, task } = await assembleContext(env, db, kind, job, masterOverride);
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, defaultHeaders: EXTENDED_CACHE_HEADER });
   const response = await client.messages.create({
     model: MODEL,
@@ -254,9 +363,7 @@ export async function docChat(
       { type: "text", text: materials, cache_control: CACHE_1H },
       { type: "text", text: task },
     ],
-    messages: messages.length
-      ? messages
-      : [{ role: "user", content: FIRST_TURN[kind] }],
+    messages: turns,
   });
   await logUsage(db, `doc_${kind}`, MODEL, response.usage);
   const text = response.content

@@ -1,37 +1,40 @@
-// Markdown → styled .docx, matched to the candidate's actual Resume.docx (Cambria):
-//   page 8.5×13in, 0.4in side margins; name 16pt bold; contact 9pt bold;
-//   section headers 10pt regular + bottom rule (mixed case, NOT bold);
-//   org names 8.5pt bold; role lines 8pt; project + tech lines 8pt bold-italic;
-//   bullets = real Word list (numPr) at 8pt, single-spaced; SKILLS lines are
-//   NOT bulleted (bold "Category:" label + list). Works on any doc content.
+// Markdown → styled .docx — the ATS-canonical resume template:
+//   US Letter, Cambria, 10pt body, 18pt name; gray metadata (roles/dates/contact),
+//   black bold headings with hairline rules; right-tab dates; literal "•" bullets
+//   with hanging indent; CERTIFICATIONS renders as flowing text (no bullets);
+//   SKILLS lines are bold-label + list. One page by prompt contract (~46 lines).
+// Works for resumes and cover letters (same header, prose body).
 
 import {
   Document, Packer, Paragraph, TextRun, ExternalHyperlink,
-  AlignmentType, BorderStyle, TabStopType, LevelFormat,
+  AlignmentType, BorderStyle, TabStopType,
 } from "docx";
 
 const FONT = "Cambria";
-// content width = 12240 − 576 − 576 = 11088 twips (8.5in page, 0.4in margins)
-const RIGHT_TAB = 11088;
+const GRAY = "595959";
+// US Letter 8.5×11in; 0.4in top/bottom, 0.5in sides → content width 7.5in
+const PAGE = { width: 12240, height: 15840 };
+const MARGIN = { top: 576, bottom: 576, left: 720, right: 720 };
+const RIGHT_TAB = 10800;
 
-// half-points (16 = 8pt). Exactly the sizes measured in Resume.docx.
-const SZ = { name: 32, contact: 18, section: 20, org: 17, role: 16, tech: 16, body: 16, prose: 20 };
+// half-points
+const SZ = { name: 36, headline: 20, contact: 17, section: 21, entry: 20, meta: 19, body: 20, prose: 21 };
 
 type Inline = TextRun | ExternalHyperlink;
 
 /** Inline markdown: **bold**, *italic*, [text](url), bare urls/emails. */
-function inlineRuns(text: string, size: number, italics = false, bold = false): Inline[] {
+function inlineRuns(text: string, size: number, opts: { italics?: boolean; bold?: boolean; color?: string } = {}): Inline[] {
   const out: Inline[] = [];
   const pushPlain = (s: string) => {
     if (!s) return;
     const re = /\*\*([^*]+)\*\*|\*([^*]+)\*/g;
     let l = 0; let b: RegExpExecArray | null;
     while ((b = re.exec(s))) {
-      if (b.index > l) out.push(new TextRun({ text: s.slice(l, b.index), font: FONT, size, italics, bold }));
-      out.push(new TextRun({ text: b[1] ?? b[2], font: FONT, size, bold: bold || !!b[1], italics: italics || !!b[2] }));
+      if (b.index > l) out.push(new TextRun({ text: s.slice(l, b.index), font: FONT, size, ...opts }));
+      out.push(new TextRun({ text: b[1] ?? b[2], font: FONT, size, color: opts.color, bold: opts.bold || !!b[1], italics: opts.italics || !!b[2] }));
       l = re.lastIndex;
     }
-    if (l < s.length) out.push(new TextRun({ text: s.slice(l), font: FONT, size, italics, bold }));
+    if (l < s.length) out.push(new TextRun({ text: s.slice(l), font: FONT, size, ...opts }));
   };
   const linkRe = /\[([^\]]+)\]\(([^)]+)\)|(\bhttps?:\/\/[^\s|]+)|([\w.+-]+@[\w.-]+\.\w+)/g;
   let last = 0; let m: RegExpExecArray | null;
@@ -46,143 +49,181 @@ function inlineRuns(text: string, size: number, italics = false, bold = false): 
     last = linkRe.lastIndex;
   }
   if (last < text.length) pushPlain(text.slice(last));
-  return out.length ? out : [new TextRun({ text, font: FONT, size, italics, bold })];
+  return out.length ? out : [new TextRun({ text, font: FONT, size, ...opts })];
 }
 
 // A trailing date/date-range on an entry line (right-aligned in Word).
 const DATE_RE =
-  /((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{0,4}\s*[–—-]\s*(?:Present|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*)?\d{4}|(?:Summer|Fall|Spring|Winter)\s*\d{4}(?:\s*[–—-]\s*(?:Summer|Fall|Spring|Winter)?\s*\d{4})?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{4}\s*[–—-]\s*(?:Present|\d{4}))\s*$/i;
+  /((?:expected\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{0,4}\s*[–—-]\s*(?:Present|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*)?\d{0,4}|(?:expected\s+)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{4}\s*[–—-]\s*(?:Present|\d{4}))\s*$/i;
 
-/** Split "Role | Aug – Dec 2026" (or trailing bare date) → [left, date|null]. */
+/** Split "Role | Aug 2026 - Dec 2026" (or trailing bare date) → [left, date|null].
+ *  Tolerates trailing annotations like "(expected)" / "(Incoming)". */
 function splitDate(line: string): [string, string | null] {
   const bar = line.match(/^(.*\S)\s*\|\s*(.+)$/);
-  if (bar && DATE_RE.test(bar[2])) return [bar[1].trim(), bar[2].trim()];
+  if (bar && DATE_RE.test(bar[2].replace(/\s*\([^)]*\)\s*$/, ""))) return [bar[1].trim(), bar[2].trim()];
   const m = line.match(DATE_RE);
   if (m && m.index && m.index > 0) return [line.slice(0, m.index).replace(/[|·—-]\s*$/, "").trim(), m[1].trim()];
   return [line, null];
 }
 
-/** An entry line: left text (bold / italic) + optional right-aligned date. */
-function entryLine(left: string, date: string | null, size: number, bold: boolean, italics = false): Paragraph {
-  const leftRuns = inlineRuns(left, size, italics, bold);
-  const children = date
-    ? [...leftRuns, new TextRun({ text: "\t" + date, font: FONT, size, bold, italics })]
-    : leftRuns;
-  return new Paragraph({
-    children,
-    tabStops: date ? [{ type: TabStopType.RIGHT, position: RIGHT_TAB }] : undefined,
-    spacing: { before: bold ? 80 : 0, after: 0, line: 240, lineRule: "auto" },
-  });
-}
-
 /** Strip the meta "WHY THIS ..." trailer — it isn't part of the document. */
 function stripWhy(md: string): string {
   const lines = md.replace(/\r/g, "").split("\n");
-  const i = lines.findIndex((l) => /^#{0,4}\s*(\*\*)?\s*why this /i.test(l.trim()));
+  const i = lines.findIndex((l) => /^#{0,4}\s*(\*\*)?\s*why th(is|ese) /i.test(l.trim()));
   return (i >= 0 ? lines.slice(0, i) : lines).join("\n").trim();
 }
 
-/** Bold a leading "Category:" label (used by SKILLS lines and label bullets). */
+/** Bold a leading "Category:" label (SKILLS lines). */
 function labelRuns(text: string, size: number): Inline[] {
-  const lab = text.match(/^\*{0,2}([A-Za-z][\w &/+.\-]{1,30})\*{0,2}:\s+(.*)$/);
+  const lab = text.match(/^\*{0,2}([A-Za-z][\w &/()+.\-]{1,60}?)\*{0,2}:\s+(.*)$/);
   return lab
     ? [new TextRun({ text: lab[1] + ": ", font: FONT, size, bold: true }), ...inlineRuns(lab[2], size)]
     : inlineRuns(text, size);
 }
 
-const BULLET_REF = "rbul";
+function bulletPara(children: Inline[]): Paragraph {
+  return new Paragraph({
+    children: [new TextRun({ text: "•  ", font: FONT, size: SZ.body }), ...children],
+    indent: { left: 260, hanging: 190 },
+    spacing: { before: 0, after: 20, line: 240, lineRule: "auto" },
+  });
+}
 
 export function markdownToParagraphs(md: string): Paragraph[] {
   const lines = stripWhy(md).split("\n");
   const paras: Paragraph[] = [];
   let seenName = false;
-  let afterEntryHead = false;
+  let headerLines = 0;          // headline + contact under the name
   let section = "";
+  let pendingCompany: string | null = null;  // "### Company" awaiting its role line
+  let afterEntryHead = false;
+
+  const entryPara = (runs: Inline[], date: string | null, before = 80): Paragraph =>
+    new Paragraph({
+      children: date ? [...runs, new TextRun({ text: "\t" + date, font: FONT, size: SZ.meta, color: GRAY })] : runs,
+      tabStops: date ? [{ type: TabStopType.RIGHT, position: RIGHT_TAB }] : undefined,
+      spacing: { before, after: 20, line: 240, lineRule: "auto" },
+    });
+
+  const flushPending = () => {
+    if (pendingCompany !== null) {
+      paras.push(entryPara(inlineRuns(pendingCompany, SZ.entry, { bold: true }), null));
+      pendingCompany = null;
+    }
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) { afterEntryHead = false; continue; }
 
-    // Name (first # heading or first non-empty line) + contact line under it
+    // Name (first # heading or first non-empty line)
     if (!seenName && (/^#\s+/.test(line) || paras.length === 0)) {
       paras.push(new Paragraph({
-        alignment: AlignmentType.CENTER, spacing: { after: 140, line: 240, lineRule: "auto" },
+        alignment: AlignmentType.CENTER, spacing: { after: 20, line: 240, lineRule: "auto" },
         children: [new TextRun({ text: line.replace(/^#\s+/, ""), font: FONT, size: SZ.name, bold: true })],
       }));
       seenName = true;
-      const next = (lines[i + 1] ?? "").trim();
-      if (next && /[|@]|https?:\/\//.test(next) && !/^#/.test(next)) {
-        paras.push(new Paragraph({
-          alignment: AlignmentType.CENTER, spacing: { after: 240, line: 240, lineRule: "auto" },
-          children: inlineRuns(next.replace(/\s*\|\s*/g, " | "), SZ.contact, false, true),
-        }));
-        i++;
+      continue;
+    }
+
+    // Up to two header lines after the name: headline, then contact (has @ or digits)
+    if (seenName && section === "" && headerLines < 2 && /[|@]/.test(line) && !/^#/.test(line)) {
+      const isContact = /@|\(\d{3}\)|\d{3}[-.\s]\d{4}/.test(line);
+      paras.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: isContact ? 40 : 20, line: 240, lineRule: "auto" },
+        children: inlineRuns(line.replace(/\s*\|\s*/g, "  |  "), isContact ? SZ.contact : SZ.headline, { color: GRAY }),
+      }));
+      headerLines++;
+      continue;
+    }
+
+    // Section heading (## or #): bold, hairline rule
+    if (/^#{1,2}\s+/.test(line)) {
+      flushPending();
+      const name = line.replace(/^#+\s+/, "");
+      section = name.toLowerCase();
+      paras.push(new Paragraph({
+        children: [new TextRun({ text: name, font: FONT, size: SZ.section, bold: true })],
+        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "222222", space: 2 } },
+        spacing: { before: 100, after: 40, line: 240, lineRule: "auto" },
+      }));
+      afterEntryHead = false;
+      continue;
+    }
+
+    // Entry heading (### Company | ### Project | Date)
+    if (/^###\s+/.test(line)) {
+      flushPending();
+      const [left, date] = splitDate(line.replace(/^###\s+/, ""));
+      if (date) {
+        paras.push(entryPara(inlineRuns(left, SZ.entry, { bold: true }), date));
+        afterEntryHead = true;
+      } else {
+        pendingCompany = left;   // wait for the role line to merge onto one line
       }
       continue;
     }
 
-    // Section header (## or #): 10pt regular, mixed case, bottom rule
-    if (/^#{1,2}\s+/.test(line)) {
-      const name = line.replace(/^#+\s+/, "");
-      section = name.toLowerCase();
-      paras.push(new Paragraph({
-        children: [new TextRun({ text: name, font: FONT, size: SZ.section })],
-        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "000000", space: 1 } },
-        spacing: { before: 120, after: 40, line: 240, lineRule: "auto" },
-      }));
-      afterEntryHead = false;
-      continue;
-    }
-
-    // Entry heading (### Org  |  ### Project | Dates)
-    if (/^###\s+/.test(line)) {
-      const [left, date] = splitDate(line.replace(/^###\s+/, ""));
-      // projects put the date on the title line → 8pt bold-italic; orgs → 8.5pt bold
-      if (date) paras.push(entryLine(left, date, SZ.tech, true, true));
-      else paras.push(entryLine(left, null, SZ.org, true, false));
+    // Role line right after "### Company" → merge: Company — Role ......... date
+    if (pendingCompany !== null) {
+      const [role, date] = splitDate(line);
+      paras.push(entryPara(
+        [
+          ...inlineRuns(pendingCompany, SZ.entry, { bold: true }),
+          new TextRun({ text: " — ", font: FONT, size: SZ.entry, color: GRAY }),
+          ...inlineRuns(role, SZ.entry, { color: GRAY }),
+        ],
+        date
+      ));
+      pendingCompany = null;
       afterEntryHead = true;
       continue;
     }
 
-    // Skills/tools section: NOT bulleted — bold "Category:" label + list
-    const inSkills = /skill|tool|technolog/.test(section);
-    if (inSkills && /^[-*•]\s+/.test(line)) {
+    // Certifications: flowing text, never bulleted
+    if (/certif/.test(section)) {
+      paras.push(new Paragraph({
+        children: inlineRuns(line.replace(/^[-*•]\s+/, ""), SZ.body),
+        spacing: { after: 20, line: 240, lineRule: "auto" },
+      }));
+      continue;
+    }
+
+    // Skills: bold "Category:" label + list, not bulleted
+    if (/skill|tool|technolog/.test(section) && /^[-*•]?\s*\*{0,2}[A-Za-z]/.test(line)) {
       paras.push(new Paragraph({
         children: labelRuns(line.replace(/^[-*•]\s+/, ""), SZ.body),
-        spacing: { after: 0, line: 240, lineRule: "auto" },
+        spacing: { after: 20, line: 240, lineRule: "auto" },
       }));
       afterEntryHead = false;
       continue;
     }
 
-    // Bullets — real Word list (numPr)
+    // Bullets
     if (/^[-*•]\s+/.test(line)) {
+      paras.push(bulletPara(inlineRuns(line.replace(/^[-*•]\s+/, ""), SZ.body)));
+      afterEntryHead = false;
+      continue;
+    }
+
+    // First non-bullet line after a project heading = tech-stack line (gray)
+    if (afterEntryHead) {
       paras.push(new Paragraph({
-        numbering: { reference: BULLET_REF, level: 0 },
-        children: labelRuns(line.replace(/^[-*•]\s+/, ""), SZ.body),
-        spacing: { after: 0, line: 240, lineRule: "auto" },
+        children: inlineRuns(line, SZ.meta, { color: GRAY }),
+        spacing: { after: 20, line: 240, lineRule: "auto" },
       }));
       afterEntryHead = false;
       continue;
     }
 
-    // First non-bullet line after an entry heading:
-    // role line ("Role | Dates") or italic tech line ("Tech · Stack")
-    if (afterEntryHead) {
-      const isTech = /·/.test(line) || /^\*.*\*$/.test(line);
-      const [left, date] = splitDate(line.replace(/^\*|\*$/g, ""));
-      // tech → 8pt bold-italic; role → 8pt regular
-      paras.push(entryLine(left, date, isTech ? SZ.tech : SZ.role, isTech, isTech));
-      afterEntryHead = false;
-      continue;
-    }
-
-    // Plain paragraph (cover-letter prose) — 10pt for readability
+    // Plain paragraph (cover-letter prose)
     paras.push(new Paragraph({
       children: inlineRuns(line, SZ.prose),
-      spacing: { after: 120, line: 264, lineRule: "auto" },
+      spacing: { after: 120, line: 276, lineRule: "auto" },
     }));
   }
+  flushPending();
   return paras;
 }
 
@@ -202,21 +243,9 @@ export async function markdownToDocx(md: string): Promise<Uint8Array> {
         run: { color: "0563C1", underline: {} },
       }],
     },
-    numbering: {
-      config: [{
-        reference: BULLET_REF,
-        levels: [{
-          level: 0, format: LevelFormat.BULLET, text: "•", alignment: AlignmentType.LEFT,
-          style: { run: { font: FONT, size: SZ.body }, paragraph: { indent: { left: 216, hanging: 180 } } },
-        }],
-      }],
-    },
     sections: [{
       properties: {
-        page: {
-          size: { width: 12240, height: 18720 },              // 8.5 × 13 in
-          margin: { top: 720, bottom: 720, left: 576, right: 576 }, // 0.5 / 0.4 in
-        },
+        page: { size: PAGE, margin: MARGIN },
       },
       children: markdownToParagraphs(md),
     }],
