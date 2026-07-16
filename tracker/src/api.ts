@@ -753,25 +753,37 @@ api.post("/jobs/:id/rematch", async (c) => {
 api.get("/dedup", async (c) => c.json(await dedupJobs(c.env.DB, false)));
 api.post("/dedup", async (c) => c.json(await dedupJobs(c.env.DB, c.req.query("apply") === "1")));
 
+// Interactive re-match: process ONE small chunk SYNCHRONOUSLY (enrich + score +
+// apply) and report progress, so the UI can loop with a live bar. Reliable —
+// unlike a big waitUntil job that the background budget kills before it commits.
+// A `cutoff` cursor (updated_at < cutoff) means each job is handled once per pass
+// even in ?all=1 mode (re-scored rows get a fresh updated_at and drop out).
 api.post("/rematch-all", async (c) => {
   const q = c.req.query();
-  const onlyMissing = q.all !== "1"; // default: only jobs without match data
+  const onlyMissing = q.all !== "1"; // default: only unscored jobs
   const profile = await getProfile(c.env.DB);
   if (!profile) return c.json({ error: "no profile synced yet — run scripts/sync_profile.py" }, 409);
+  const CHUNK = 8;
+  const cutoff = q.cutoff || new Date().toISOString();
+  const phaseQ = ACTIVE_PHASES.map(() => "?").join(",");
+  const missClause = onlyMissing ? "AND match_score IS NULL" : "";
   const rows = await c.env.DB
     .prepare(
       `SELECT id, company, title, location, url, description, requirements FROM jobs
-       WHERE phase IN (${ACTIVE_PHASES.map(() => "?").join(",")})
-       ${onlyMissing ? "AND match_score IS NULL" : ""}
-       ORDER BY updated_at ASC
-       LIMIT 45`
+       WHERE phase IN (${phaseQ}) AND updated_at < ? ${missClause}
+       ORDER BY updated_at ASC LIMIT ${CHUNK}`
     )
-    .bind(...ACTIVE_PHASES)
+    .bind(...ACTIVE_PHASES, cutoff)
     .all<MatchInput>();
+  let rescored = 0;
   if (rows.results.length) {
-    c.executionCtx.waitUntil(matchAndApply(c.env.DB, rows.results, c.env.ANTHROPIC_API_KEY));
+    rescored = await matchAndApply(c.env.DB, rows.results, c.env.ANTHROPIC_API_KEY, CHUNK);
   }
-  return c.json({ queued: rows.results.length });
+  const rem = await c.env.DB
+    .prepare(`SELECT COUNT(*) AS n FROM jobs WHERE phase IN (${phaseQ}) AND updated_at < ? ${missClause}`)
+    .bind(...ACTIVE_PHASES, cutoff)
+    .first<{ n: number }>();
+  return c.json({ cutoff, rescored, remaining: rem?.n ?? 0 });
 });
 
 // ── Batch rematch (Message Batches API, ~50% cheaper, async) ──────────────────

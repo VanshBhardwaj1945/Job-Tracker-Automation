@@ -290,12 +290,13 @@ export async function applyMatches(db: D1Database, results: MatchResult[]): Prom
 export async function matchAndApply(
   db: D1Database,
   jobs: MatchInput[],
-  apiKey: string
+  apiKey: string,
+  enrichCap = 6
 ): Promise<number> {
   try {
     const profile = await getProfile(db);
     if (!profile) return 0;
-    await enrichInputs(db, jobs, apiKey);
+    await enrichInputs(db, jobs, apiKey, enrichCap);
     // Apply per batch: waitUntil kills long runs (~30s) — incremental writes
     // mean whatever finished is persisted instead of losing everything.
     let applied = 0;

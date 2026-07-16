@@ -1871,38 +1871,40 @@ function renderActPanel(key) {
   if (btn && can) btn.onclick = () => (m.local ? runRematchAll() : runAction(key));
 }
 
-// Re-match all jobs: submit a Message Batch, then poll collect until it lands.
+// Re-match all jobs: loop small SYNCHRONOUS chunks (each enriches + re-scores +
+// applies) with a live progress bar. Reliable and immediate — no waiting on a
+// background Message Batch that may take hours.
 async function runRematchAll() {
   const btn = $("actRun"), prog = $("actProg"), status = $("actStatus");
   btn.disabled = true; prog.hidden = false; prog.className = "prog run";
-  status.innerHTML = "Submitting batch…";
-  let total = 0;
+  status.innerHTML = "Re-scoring every job… <span class=\"hint\">re-fetches descriptions and re-scores; stay on this page</span>";
+  let cutoff = null, done = 0, total = 0, stop = false;
+  const fill = prog.querySelector(".fill");
   try {
-    const res = await apiCall("/rematch-batch?all=1&cap=300", { method:"POST" });
-    total = res.count || 0;
-    if (!total) { prog.className = "prog done"; status.textContent = "Nothing to re-match."; btn.disabled = false; return; }
-    status.innerHTML = `Re-scoring <b>${total}</b> jobs… <span class="hint">this runs in the background (~a few min)</span>`;
-  } catch (e) {
-    prog.className = "prog fail"; status.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
-    btn.disabled = false; return;
-  }
-  const started = Date.now();
-  const tick = async () => {
-    let r = null;
-    try { r = await apiCall("/rematch-batch/collect", { method:"POST" }); } catch {}
-    if (r && r.status === "ended") {
-      prog.className = "prog done";
-      status.innerHTML = `Done — <b>${r.applied}</b> jobs re-scored`;
-      btn.disabled = false;
-      toast(`Re-matched ${r.applied} jobs`);
-      return;
+    // first call establishes the cutoff + total remaining
+    const first = await apiCall("/rematch-all?all=1", { method: "POST" });
+    cutoff = first.cutoff; done = first.rescored; total = first.rescored + first.remaining;
+    while (!stop) {
+      if (fill && total) { fill.style.width = Math.min(100, Math.round(done / total * 100)) + "%"; }
+      status.innerHTML = `Re-scoring… <b>${done}/${total}</b> jobs`;
+      if (!total || done >= total) break;
+      const r = await apiCall(`/rematch-all?all=1&cutoff=${encodeURIComponent(cutoff)}`, { method: "POST" });
+      if (!r.rescored && r.remaining) { // nothing moved but rows remain — avoid infinite loop
+        stop = true; break;
+      }
+      done += r.rescored;
+      if (r.remaining === 0) { done = total; break; }
     }
-    const mins = Math.floor((Date.now() - started) / 60000);
-    status.innerHTML = `Re-scoring <b>${total}</b> jobs… <span class="hint">${mins}m elapsed · still processing</span>`;
-    if (Date.now() - started > 25 * 60 * 1000) { status.innerHTML = "Still processing — check back and hit Run again to collect."; btn.disabled = false; return; }
-    setTimeout(tick, 20000);
-  };
-  setTimeout(tick, 15000);
+    prog.className = "prog done";
+    if (fill) fill.style.width = "100%";
+    status.innerHTML = `Done — <b>${done}</b> jobs re-scored ✓`;
+    toast(`Re-matched ${done} jobs`);
+  } catch (e) {
+    prog.className = "prog fail";
+    status.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span> <span class="hint">re-scored ${done} before stopping</span>`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // Typical wall-clock seconds per action — drives the live progress bar.
