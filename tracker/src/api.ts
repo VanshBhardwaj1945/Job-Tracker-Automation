@@ -46,6 +46,52 @@ async function findNormDup(
   return rows.results.find((r) => r.id !== excludeId && normKey(r.company, r.title) === key) ?? null;
 }
 
+/** De-duplicate the board: rows sharing a normKey (same company + title, season/
+ *  year stripped) are collapsed to the single richest copy. SAFE — only removes
+ *  untouched auto-generated rows (phase found/todo, no notes, no saved docs);
+ *  anything you've applied to, dismissed, noted, or attached a doc to is kept.
+ *  GET returns a dry-run count; POST ?apply=1 actually deletes. */
+async function dedupJobs(db: D1Database, apply: boolean): Promise<{ groups: number; removable: number; removed: number }> {
+  const rows = (await db.prepare("SELECT * FROM jobs").all<JobRow>()).results;
+  const artRows = (await db.prepare("SELECT DISTINCT job_id FROM artifacts").all<{ job_id: string }>()).results;
+  const hasArt = new Set(artRows.map((a) => a.job_id));
+
+  const groups = new Map<string, JobRow[]>();
+  for (const r of rows) {
+    const k = normKey(r.company, r.title);
+    (groups.get(k) ?? groups.set(k, []).get(k)!).push(r);
+  }
+  // richness score → the keeper is the highest-scoring row in a group
+  const rich = (r: JobRow) =>
+    (["found", "todo", "not_applying"].includes(r.phase) ? 0 : 10000) +   // user-advanced phase
+    (hasArt.has(r.id) ? 4000 : 0) +
+    ((r.notes ?? "").trim() ? 2000 : 0) +
+    (r.bucket ? 1000 : 0) +
+    ((r.requirements ?? "").trim() ? 400 : 0) +
+    ((r.description ?? "").trim() ? 300 : 0) +
+    (r.match_score ?? 0);
+  // a row is safe to delete only if it carries no user state
+  const untouched = (r: JobRow) =>
+    ["found", "todo"].includes(r.phase) && !(r.notes ?? "").trim() && !r.bucket && !hasArt.has(r.id);
+
+  let dupGroups = 0, removable = 0, removed = 0;
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    dupGroups++;
+    g.sort((a, b) => rich(b) - rich(a) || (a.created_at < b.created_at ? -1 : 1));
+    for (const r of g.slice(1)) {
+      if (!untouched(r)) continue;   // never delete user-curated rows
+      removable++;
+      if (apply) {
+        await db.prepare("DELETE FROM jobs WHERE id = ?").bind(r.id).run();
+        await db.prepare("DELETE FROM events WHERE job_id = ?").bind(r.id).run();
+        removed++;
+      }
+    }
+  }
+  return { groups: dupGroups, removable, removed };
+}
+
 interface JobRow {
   id: string;
   company: string;
@@ -702,6 +748,10 @@ api.post("/jobs/:id/rematch", async (c) => {
   const updated = await c.env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(id).first<JobRow>();
   return c.json({ job: updated });
 });
+
+// De-duplicate the board. GET = dry-run count; POST ?apply=1 = delete.
+api.get("/dedup", async (c) => c.json(await dedupJobs(c.env.DB, false)));
+api.post("/dedup", async (c) => c.json(await dedupJobs(c.env.DB, c.req.query("apply") === "1")));
 
 api.post("/rematch-all", async (c) => {
   const q = c.req.query();
