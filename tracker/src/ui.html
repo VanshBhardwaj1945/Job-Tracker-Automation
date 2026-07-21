@@ -330,6 +330,14 @@
            vertical-align: middle; flex: none; }
   .fresh.f-new { background: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,.16); }
   .fresh.f-recent { background: var(--amber); box-shadow: 0 0 0 3px rgba(239,199,94,.14); }
+  /* bulk multi-select */
+  .selcol { width: 30px; text-align: center; padding-left: 6px !important; padding-right: 0 !important; }
+  .selcol input { cursor: pointer; width: 15px; height: 15px; accent-color: var(--accent); vertical-align: middle; }
+  .bulkbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 10px;
+             border-radius: 12px; animation: riseIn .18s ease both; }
+  .bulkbar #bulkCount { font-weight: 700; font-size: 13px; }
+  .bulkbar .spacer { flex: 1; }
+  .bulkbar select { min-width: 130px; }
   .match { font-weight: 700; font-size: 12.5px; white-space: nowrap; }
   .match small { font-size: 9px; color: var(--dim); font-weight: 600; margin-left: 1px; }
   .paycell { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -745,10 +753,19 @@
         </select>
         <button id="bucketBtn" class="bucketbtn" type="button" title="View a bucket" aria-label="View a bucket">${'﻿'}</button>
       </div>
+      <div class="bulkbar glass" id="bulkbar" style="display:none">
+        <span id="bulkCount">0 selected</span>
+        <span class="spacer"></span>
+        <label class="hint" style="font-size:12px">Set status</label>
+        <select id="bulkPhase"></select>
+        <button class="primary" id="bulkApply">Apply</button>
+        <button id="bulkClear">Clear</button>
+      </div>
       <div class="glass tablecard">
         <table>
           <thead>
             <tr>
+              <th class="selcol"><input type="checkbox" id="selAll" title="Select all on this page"></th>
               <th>Company</th><th>Title</th><th class="hide-sm">Category</th>
               <th>AI match</th><th class="hide-sm">Pay</th><th class="hide-sm">Term</th>
               <th class="hide-sm"></th><th>Phase</th>
@@ -999,7 +1016,7 @@ function icon(name, cls) {
 function dot(color) { return `<span class="sdot" style="background:${color}"></span>`; }
 const REMATCH_LABEL = icon('refresh') + 'Re-match';
 const skelRows = (n = 6) => Array.from({ length: n }, () =>
-  '<tr><td colspan="10" style="border:none;padding:6px 2px"><div class="skel skel-row"></div></td></tr>').join("");
+  '<tr><td colspan="11" style="border:none;padding:6px 2px"><div class="skel skel-row"></div></td></tr>').join("");
 const skelCards = (n = 6) =>
   '<div class="kpis">' + Array.from({ length: 5 }, () => '<div class="skel" style="height:82px"></div>').join("") + '</div>' +
   '<div class="grid">' + Array.from({ length: n }, () => '<div class="skel skel-card"></div>').join("") + '</div>';
@@ -1008,6 +1025,7 @@ const state = { page:"tracker", tab:"top", q:"", sort:"rank", watchlist:"",
                 terms:[], termEx:false, terms_all:[],
                 anScope:"all", // analytics scope: "all" | "applied" | node id
                 buckets:[], bucket:"", // user-defined favorite lists + active bucket filter
+                selected:new Set(), // ids ticked for a bulk status change
                 counts:{}, recommended:0, jobs:[] };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
@@ -1234,7 +1252,46 @@ async function load() {
   const data = await apiCall("/jobs?" + p);
   state.jobs = data.jobs; state.counts = data.counts; state.tiers = data.tiers || {};
   if (data.terms) state.terms_all = data.terms;
+  state.selected.clear();            // selection is per-view; a fresh query resets it
   renderTabs(); renderRows();
+}
+
+/* ── bulk multi-select: change several rows' status at once ──────────────── */
+function updateBulkBar() {
+  const bar = $("bulkbar"); if (!bar) return;
+  const n = state.selected.size;
+  bar.style.display = n ? "flex" : "none";
+  $("bulkCount").textContent = `${n} selected`;
+  const all = $("selAll");
+  if (all) {
+    const vis = state.jobs.length;
+    const selVis = state.jobs.filter(j => state.selected.has(j.id)).length;
+    all.checked = vis > 0 && selVis === vis;
+    all.indeterminate = selVis > 0 && selVis < vis;
+  }
+}
+function initBulkBar() {
+  $("bulkPhase").innerHTML = PHASES.map(p => `<option value="${p}">${PHASE_LABEL[p]}</option>`).join("");
+  $("bulkPhase").value = "applied";
+  $("selAll").onchange = (e) => {
+    if (e.target.checked) state.jobs.forEach(j => state.selected.add(j.id));
+    else state.selected.clear();
+    renderRows();
+  };
+  $("bulkClear").onclick = () => { state.selected.clear(); renderRows(); };
+  $("bulkApply").onclick = async () => {
+    const ids = [...state.selected];
+    if (!ids.length) return;
+    const phase = $("bulkPhase").value;
+    $("bulkApply").disabled = true;
+    try {
+      const r = await apiCall("/jobs/bulk-phase", { method: "POST",
+        body: JSON.stringify({ ids, phase }) });
+      toast(`${r.changed} job(s) → ${PHASE_LABEL[phase] || phase}`);
+      await load();
+    } catch (e) { toast(e.message); }
+    finally { $("bulkApply").disabled = false; }
+  };
 }
 
 function tabCount(tab) {
@@ -1264,6 +1321,7 @@ function renderRows() {
     : "Nothing here yet.";
   tb.innerHTML = state.jobs.map(j => `
     <tr class="row" data-id="${j.id}">
+      <td class="selcol"><input type="checkbox" class="rowsel" data-id="${j.id}" ${state.selected.has(j.id) ? "checked" : ""}></td>
       <td class="co">${freshHtml(j)}${esc(j.company)}${j.watchlisted === 0 ? '<span class="pill newco">new co</span>' : ""}</td>
       <td class="title">${esc(j.title)}
         <div class="loc">${esc(j.location) || "—"}</div>
@@ -1284,9 +1342,14 @@ function renderRows() {
     </tr>`).join("");
 
   tb.querySelectorAll("tr.row").forEach(tr => tr.onclick = (e) => {
-    if (e.target.closest("select, .star, a")) return;
+    if (e.target.closest("select, .star, a, input, .selcol")) return;
     openDetail(tr.dataset.id);
   });
+  tb.querySelectorAll("input.rowsel").forEach(cb => cb.onchange = () => {
+    if (cb.checked) state.selected.add(cb.dataset.id); else state.selected.delete(cb.dataset.id);
+    updateBulkBar();
+  });
+  updateBulkBar();
   tb.querySelectorAll("select.phase").forEach(sel => {
     sel.onclick = (e) => e.stopPropagation();
     sel.onchange = () => {
@@ -2159,6 +2222,7 @@ const UPLOAD_META = {
 const docLabel = (k) => (DOC_META[k] || UPLOAD_META[k] || { icon: "file", label: k });
 
 let rMessages = [], rJobId = null, rKind = "resume", rBusy = false;
+let rFocusText = "";   // optional pre-generation guidance (folded into the first draft only)
 
 function renderChat() {
   $("rLog").innerHTML = rMessages.map((m, i) => m.role === "user"
@@ -2178,7 +2242,7 @@ async function sendDocTurn(text) {
   rBusy = true; $("rErr").textContent = ""; renderChat();
   try {
     const res = await apiCall(`/jobs/${rJobId}/doc/${rKind}`, { method: "POST",
-      body: JSON.stringify({ messages: rMessages, master_override: $("rMaster").value.trim() }) });
+      body: JSON.stringify({ messages: rMessages, master_override: $("rMaster").value.trim(), instructions: rFocusText }) });
     rMessages.push({ role: "assistant", content: res.reply });
   } catch (e) {
     $("rErr").textContent = e.message;
@@ -2240,7 +2304,7 @@ $("rPro").onclick = async () => {
   $("rPro").disabled = true; $("rPro").textContent = "…";
   try {
     const { prompt } = await apiCall(`/jobs/${rJobId}/doc-prompt/${rKind}`, { method: "POST",
-      body: JSON.stringify({ master_override: $("rMaster").value.trim() }) });
+      body: JSON.stringify({ master_override: $("rMaster").value.trim(), instructions: rFocusText }) });
     await navigator.clipboard.writeText(prompt);
     toast("Prompt copied — paste into claude.ai (free on Pro), then save/upload the result here");
   } catch (e) { toast(e.message); }
@@ -2249,7 +2313,7 @@ $("rPro").onclick = async () => {
 
 function openDoc(kind) {
   if (!detailJob) return;
-  rKind = kind; rJobId = detailJob.id; rMessages = [];
+  rKind = kind; rJobId = detailJob.id; rMessages = []; rFocusText = "";
   const m = DOC_META[kind];
   $("rTitle").textContent = `${m.label} — ${detailJob.company}: ${detailJob.title.slice(0, 46)}`;
   $("rErr").textContent = "";
@@ -2269,7 +2333,12 @@ function showDocLanding() {
   $("rLog").innerHTML = `
     <div class="landing">
       <p>Draft a <b>${esc(m.label.toLowerCase())}</b> tailored to <b>${esc(detailJob.company)}</b> — ${esc(detailJob.title)}.</p>
-      <div class="row2" style="flex-wrap:wrap; gap:8px; margin-top:6px">
+      <label class="hint" style="display:block; font-size:11px; margin:8px 0 4px">
+        Anything specific to focus on first? <span style="opacity:.7">(optional — folded into the first draft, e.g. "general cybersecurity posting — emphasize detection engineering")</span>
+      </label>
+      <textarea id="rFocus" rows="2" placeholder="Optional guidance before the first draft…"
+        style="width:100%; resize:vertical; box-sizing:border-box">${esc(rFocusText)}</textarea>
+      <div class="row2" style="flex-wrap:wrap; gap:8px; margin-top:8px">
         <button class="primary" id="rGen">Generate with Opus</button>
         <button id="rGenPro">Use my Claude (free)</button>
       </div>
@@ -2278,8 +2347,8 @@ function showDocLanding() {
         claude.ai on your Pro plan ($0). You can also upload a file you already have from the job's Documents section.
       </p>
     </div>`;
-  $("rGen").onclick = () => { $("rInputRow").style.display = ""; sendDocTurn(null); };
-  $("rGenPro").onclick = () => $("rPro").click();
+  $("rGen").onclick = () => { rFocusText = ($("rFocus")?.value || "").trim(); $("rInputRow").style.display = ""; sendDocTurn(null); };
+  $("rGenPro").onclick = () => { rFocusText = ($("rFocus")?.value || "").trim(); $("rPro").click(); };
 }
 $("rSrcToggle").onclick = () => {
   const open = $("rSrc").style.display === "none";
@@ -2605,6 +2674,7 @@ $("sortSel").onchange = (e) => { state.sort = e.target.value; load(); };
   buildCatSelect();
   catTreeFilter("catMsel");
   buildBucketFilter();
+  initBulkBar();
   await load();
 })().catch(e => { $("empty").hidden = false; $("empty").textContent = "Failed to load: " + e.message; });
 </script>

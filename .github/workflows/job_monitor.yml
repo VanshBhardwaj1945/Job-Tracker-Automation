@@ -26,6 +26,7 @@ on:
           - gmail
           - digest
           - sync-tracker
+          - rematch
 
 concurrency:
   group: job-monitor
@@ -107,6 +108,14 @@ jobs:
           TRACKER_CLIENT_ID:     ${{ secrets.TRACKER_CLIENT_ID }}
           TRACKER_CLIENT_SECRET: ${{ secrets.TRACKER_CLIENT_SECRET }}
         run: python monitor/scraper.py --sync-tracker
+
+      - name: Re-match all unscored tracker jobs
+        if: ${{ github.event.inputs.mode == 'rematch' }}
+        env:
+          TRACKER_URL:           ${{ secrets.TRACKER_URL }}
+          TRACKER_CLIENT_ID:     ${{ secrets.TRACKER_CLIENT_ID }}
+          TRACKER_CLIENT_SECRET: ${{ secrets.TRACKER_CLIENT_SECRET }}
+        run: python scripts/rematch.py
 
       - name: Weekly digest + tracker housekeeping
         if: ${{ github.event.inputs.mode == 'digest' || github.event.schedule == '0 22 * * 0' }}

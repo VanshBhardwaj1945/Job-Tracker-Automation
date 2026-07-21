@@ -290,13 +290,24 @@ async function assembleContext(
   return { materials, task };
 }
 
+/** Optional per-generation focus the user types BEFORE the first draft (e.g.
+ *  "this is a general cybersecurity posting — focus on detection engineering").
+ *  Folded into the first turn so the first draft already reflects it, instead of
+ *  drafting then correcting. */
+function firstTurnFor(kind: GenKind, focus?: string): string {
+  const f = (focus ?? "").trim();
+  return f
+    ? `${FIRST_TURN[kind]}\n\nBEFORE WRITING — specific guidance from the candidate; prioritize it: ${f.slice(0, 2000)}`
+    : FIRST_TURN[kind];
+}
+
 /** Full self-contained prompt to paste into Claude.ai (Pro plan) — no API cost.
  *  Same instructions + context as the API path, joined into one message. */
 export async function buildDocPrompt(
-  env: Env, db: D1Database, kind: GenKind, job: JobCtx, masterOverride?: string
+  env: Env, db: D1Database, kind: GenKind, job: JobCtx, masterOverride?: string, focus?: string
 ): Promise<string> {
   const { materials, task } = await assembleContext(env, db, kind, job, masterOverride);
-  return `${materials}\n\n${task}\n\n${FIRST_TURN[kind]}`;
+  return `${materials}\n\n${task}\n\n${firstTurnFor(kind, focus)}`;
 }
 
 /** Estimate rendered lines of a resume in the Cambria/Letter template
@@ -324,10 +335,11 @@ export async function docChat(
   kind: GenKind,
   job: JobCtx,
   messages: ChatMessage[],
-  masterOverride?: string
+  masterOverride?: string,
+  focus?: string
 ): Promise<string> {
   const { materials, task } = await assembleContext(env, db, kind, job, masterOverride);
-  const turns: ChatMessage[] = messages.length ? messages : [{ role: "user", content: FIRST_TURN[kind] }];
+  const turns: ChatMessage[] = messages.length ? messages : [{ role: "user", content: firstTurnFor(kind, focus) }];
   const first = await runDocTurn(env, db, kind, materials, task, turns);
 
   // Page-fit auto-revision (resume only, first draft only): the model can't count

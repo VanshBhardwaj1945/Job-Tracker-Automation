@@ -428,6 +428,41 @@ api.patch("/jobs/:id", async (c) => {
   return c.json({ job: updated });
 });
 
+// ── Bulk phase change: select several rows, set them all to one phase ─────────
+// (e.g. mark a batch "applied" or "not_applying" at once). Logs a phase_change
+// event per row and sets applied_at when moving into an applied-ish phase.
+api.post("/jobs/bulk-phase", async (c) => {
+  const b = await c.req.json<{ ids?: string[]; phase?: string }>();
+  const phase = String(b.phase ?? "");
+  const ids = (Array.isArray(b.ids) ? b.ids : []).map(String).filter(Boolean).slice(0, 500);
+  if (!(PHASES as readonly string[]).includes(phase)) return c.json({ error: "invalid phase" }, 400);
+  if (!ids.length) return c.json({ error: "no ids" }, 400);
+  const ts = now();
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = await c.env.DB
+    .prepare(`SELECT id, phase, applied_at FROM jobs WHERE id IN (${placeholders})`)
+    .bind(...ids)
+    .all<{ id: string; phase: string; applied_at: string | null }>();
+  const setsApplied = ["applied", "oa", "interview", "offer", "accepted"].includes(phase);
+  const stmts = [];
+  let changed = 0;
+  for (const r of rows.results) {
+    if (r.phase === phase) continue;
+    changed++;
+    const setApplied = setsApplied && !r.applied_at;
+    stmts.push(
+      c.env.DB.prepare(
+        `UPDATE jobs SET phase = ?, applied_at = CASE WHEN ? THEN ? ELSE applied_at END, updated_at = ? WHERE id = ?`
+      ).bind(phase, setApplied ? 1 : 0, ts, ts, r.id),
+      c.env.DB.prepare(
+        `INSERT INTO events (job_id, ts, type, detail) VALUES (?, ?, 'phase_change', ?)`
+      ).bind(r.id, ts, `${r.phase} → ${phase} (bulk)`)
+    );
+  }
+  if (stmts.length) await c.env.DB.batch(stmts);
+  return c.json({ requested: ids.length, changed, phase });
+});
+
 api.delete("/jobs/:id", async (c) => {
   const id = c.req.param("id");
   await c.env.DB.batch([
@@ -567,7 +602,7 @@ async function docRoute(c: any, rawKind: string) {
   const id = c.req.param("id");
   const job = (await c.env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(id).first()) as JobRow | null;
   if (!job) return c.json({ error: "not found" }, 404);
-  const b = (await c.req.json()) as { messages?: ChatMessage[]; master_override?: string };
+  const b = (await c.req.json()) as { messages?: ChatMessage[]; master_override?: string; instructions?: string };
   const messages = (b.messages ?? [])
     .filter((m: any) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     .slice(-20)
@@ -579,7 +614,8 @@ async function docRoute(c: any, rawKind: string) {
         description: job.description, requirements: job.requirements,
         match_reason: job.match_reason, skills: job.skills, url: job.url },
       messages,
-      (b.master_override ?? "").trim() || undefined
+      (b.master_override ?? "").trim() || undefined,
+      (b.instructions ?? "").trim() || undefined
     );
     return c.json({ reply });
   } catch (e) {
@@ -596,14 +632,15 @@ api.post("/jobs/:id/doc-prompt/:kind", async (c) => {
   const id = c.req.param("id");
   const job = await c.env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(id).first<JobRow>();
   if (!job) return c.json({ error: "not found" }, 404);
-  const b = await c.req.json<{ master_override?: string }>().catch(() => ({} as { master_override?: string }));
+  const b = await c.req.json<{ master_override?: string; instructions?: string }>().catch(() => ({} as { master_override?: string; instructions?: string }));
   try {
     const prompt = await buildDocPrompt(
       c.env, c.env.DB, kind as GenKind,
       { company: job.company, title: job.title, location: job.location, term: job.term,
         description: job.description, requirements: job.requirements,
         match_reason: job.match_reason, skills: job.skills, url: job.url },
-      (b.master_override ?? "").trim() || undefined
+      (b.master_override ?? "").trim() || undefined,
+      (b.instructions ?? "").trim() || undefined
     );
     return c.json({ prompt });
   } catch (e) {
