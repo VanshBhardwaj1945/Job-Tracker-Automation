@@ -104,6 +104,22 @@ def extract_term(*texts) -> str:
     return ", ".join(out[:3])
 
 
+def _norm_posted(v):
+    """Feed post-dates come in mixed shapes (epoch secs/ms, ISO, plain date).
+    Normalize to an ISO-8601 string so the tracker can compute freshness; None
+    when absent/unparseable."""
+    if not v:
+        return None
+    try:
+        ts = float(v)
+        if ts > 1e11:          # milliseconds → seconds
+            ts /= 1000.0
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+    except (TypeError, ValueError):
+        s = str(v).strip()
+        return s or None
+
+
 def build_job(company, raw, source, category):
     return {
         "id": make_job_id(company, raw["title"], raw["url"]),
@@ -119,6 +135,7 @@ def build_job(company, raw, source, category):
         "watchlisted": 1 if is_watchlisted(company) else 0,
         "term": extract_term(raw["title"], raw.get("term_hint", ""),
                              (raw.get("description") or "")[:600]),
+        "posted_at": _norm_posted(raw.get("date_posted")),
         "found_at": datetime.now(timezone.utc).isoformat(),
     }
 

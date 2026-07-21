@@ -325,6 +325,11 @@
   .pill.cat.more { color: var(--muted); box-shadow: none; padding-left: 8px; }
   .pill.newco { color: var(--cyan); border-color: rgba(34,211,238,.35); background: rgba(34,211,238,.08);
                 font-size: 9.5px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; }
+  /* posting freshness dot — only shown for recent postings (act-now signal) */
+  .fresh { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px;
+           vertical-align: middle; flex: none; }
+  .fresh.f-new { background: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,.16); }
+  .fresh.f-recent { background: var(--amber); box-shadow: 0 0 0 3px rgba(239,199,94,.14); }
   .match { font-weight: 700; font-size: 12.5px; white-space: nowrap; }
   .match small { font-size: 9px; color: var(--dim); font-weight: 600; margin-left: 1px; }
   .paycell { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -731,6 +736,7 @@
   </select>
   <select id="sortSel">
           <option value="rank">Sort: Match rank</option>
+          <option value="fresh">Sort: Freshest</option>
           <option value="updated">Sort: Updated</option>
           <option value="created">Sort: Added</option>
           <option value="applied">Sort: Applied</option>
@@ -1181,6 +1187,23 @@ function matchHtml(j) {
   return `<span class="loc">—</span>`;
 }
 
+/* Posting freshness dot. Uses the real post date when a feed gave us one
+   (posted_at), else when the tracker first saw the row (created_at). Only
+   rendered for recent postings — green < 24h, amber < 72h — as an act-now cue;
+   older rows show nothing to keep the list clean. */
+function freshHtml(j) {
+  const iso = j.posted_at || j.created_at;
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (isNaN(ms) || ms < 0) return "";
+  const h = ms / 3.6e6;
+  if (h >= 72) return "";
+  const src = j.posted_at ? "Posted" : "Seen";
+  const ago = h < 1 ? "just now" : h < 24 ? Math.round(h) + "h ago" : Math.round(h / 24) + "d ago";
+  const cls = h < 24 ? "f-new" : "f-recent";
+  return `<span class="fresh ${cls}" title="${src} ${ago}"></span>`;
+}
+
 /* ── navigation ─────────────────────────────────────────────────────────── */
 function setPage(p) {
   state.page = p;
@@ -1241,7 +1264,7 @@ function renderRows() {
     : "Nothing here yet.";
   tb.innerHTML = state.jobs.map(j => `
     <tr class="row" data-id="${j.id}">
-      <td class="co">${esc(j.company)}${j.watchlisted === 0 ? '<span class="pill newco">new co</span>' : ""}</td>
+      <td class="co">${freshHtml(j)}${esc(j.company)}${j.watchlisted === 0 ? '<span class="pill newco">new co</span>' : ""}</td>
       <td class="title">${esc(j.title)}
         <div class="loc">${esc(j.location) || "—"}</div>
         ${j.match_reason ? `<div class="reason">↳ ${esc(j.match_reason)}</div>` : ""}

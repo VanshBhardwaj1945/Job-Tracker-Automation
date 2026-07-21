@@ -118,6 +118,7 @@ interface JobRow {
   created_at: string;
   updated_at: string;
   applied_at: string | null;
+  posted_at: string | null;
 }
 
 const SORTS: Record<string, string> = {
@@ -129,6 +130,8 @@ const SORTS: Record<string, string> = {
   pay: `COALESCE(likeability, -1) DESC, COALESCE(match_score, -1) DESC, updated_at DESC`,
   updated: "updated_at DESC",
   created: "created_at DESC",
+  // freshest first by real post date when known, else when we first saw it
+  fresh: "COALESCE(posted_at, created_at) DESC",
   applied: "applied_at DESC NULLS LAST",
   score: "COALESCE(match_score, ai_score) DESC NULLS LAST",
   company: "company COLLATE NOCASE ASC, title ASC",
@@ -318,10 +321,11 @@ api.post("/jobs/bulk", async (c) => {
   const ts = now();
   const stmt = c.env.DB.prepare(
     `INSERT INTO jobs (id, company, title, location, url, source, category, categories, cat_path, ai_score, ai_reason,
-                       description, watchlisted, term, phase, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'found', ?, ?)
+                       description, watchlisted, term, posted_at, phase, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'found', ?, ?)
      ON CONFLICT(id) DO UPDATE SET watchlisted = excluded.watchlisted,
-       term = CASE WHEN excluded.term != '' THEN excluded.term ELSE jobs.term END`
+       term = CASE WHEN excluded.term != '' THEN excluded.term ELSE jobs.term END,
+       posted_at = COALESCE(jobs.posted_at, excluded.posted_at)`
   );
   const incoming = b.jobs.slice(0, 500).map((j) => ({
     id: String(j.id ?? ""),
@@ -335,6 +339,7 @@ api.post("/jobs/bulk", async (c) => {
     description: String(j.description ?? "").slice(0, 5000),
     watchlisted: j.watchlisted === 0 || j.watchlisted === false ? 0 : 1,
     term: String(j.term ?? "").slice(0, 80),
+    posted_at: typeof j.posted_at === "string" && j.posted_at ? j.posted_at.slice(0, 40) : null,
   }));
   let inserted: MatchInput[] = []; // carries url → enrichment fetches descriptions
   if (incoming.length) {
@@ -368,7 +373,7 @@ api.post("/jobs/bulk", async (c) => {
         toUpsert.map((j) =>
           stmt.bind(j.id, j.company, j.title, j.location, j.url, "monitor",
                     j.category, JSON.stringify([j.category]), catPath([j.category]),
-                    j.ai_score, j.ai_reason, j.description, j.watchlisted, j.term, ts, ts)
+                    j.ai_score, j.ai_reason, j.description, j.watchlisted, j.term, j.posted_at, ts, ts)
         )
       );
     }

@@ -106,6 +106,13 @@ const MIGRATIONS: string[][] = [
   [
     `UPDATE jobs SET ai_score = ai_score * 10 WHERE ai_score IS NOT NULL AND ai_score <= 10`,
   ],
+  // v10: posting freshness. `posted_at` = the employer's post date when a feed
+  // exposes it (e.g. a listing feed's date_posted, normalized to ISO by the
+  // monitor); NULL otherwise. Freshness falls back to `created_at` (when the
+  // tracker first saw the row) — for the fast-reacting monitor that's ~= live.
+  [
+    `ALTER TABLE jobs ADD COLUMN posted_at TEXT`,
+  ],
 ];
 
 let migrated = false;
