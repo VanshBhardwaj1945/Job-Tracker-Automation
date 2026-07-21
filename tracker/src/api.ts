@@ -287,7 +287,7 @@ api.post("/jobs", async (c) => {
       `INSERT INTO jobs (id, company, title, location, url, source, category, categories, cat_path, ai_score, ai_reason,
                          match_score, match_reason, skills, term,
                          description, requirements, phase, importance, notes, created_at, updated_at, applied_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id, b.company, b.title, b.location ?? "", url, b.source ?? "manual",
