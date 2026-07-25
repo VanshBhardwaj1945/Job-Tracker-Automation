@@ -123,6 +123,18 @@ net. Key decisions:
   posting, extracting structured fields from a page, classifying emails) uses
   **Claude Haiku** — fast and cheap. The rare, high-value work (generating a
   tailored resume or cover letter) uses **Claude Opus**.
+- **Enrichment before judgment.** A score is only as good as the text the model
+  sees, so before matching, each job's real posting is fetched through a laddered
+  pipeline: the board's clean JSON API where one exists (Greenhouse / Lever /
+  Ashby / Workday), then the page's embedded schema.org JSON-LD, then structured
+  HTML. For JS-walled pages a Worker physically can't render (no browser runtime
+  at the edge), there's an optional last-resort hop to a companion service I
+  built: [**browser-render**](https://github.com/VanshBhardwaj1945/browser-render),
+  an SSRF-hardened headless-Chromium fetcher on AWS Lambda — pre-flight DNS
+  checks and per-request interception keep an attacker-supplied URL from ever
+  reaching private or cloud-metadata addresses, and its SSRF guard fails closed
+  while its threat blocklist fails open. Every stage fails soft: worst case,
+  matching degrades to title-only rather than breaking the pipeline.
 - **Profile-aware matching.** Every job is scored **0–100** against the user's
   synced profile with a calibrated, deliberately harsh, lane-based rubric (a
   tracker where everything is a 90 is useless) — the score triages into three
