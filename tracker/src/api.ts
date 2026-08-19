@@ -30,11 +30,20 @@ function cleanUrl(u: unknown): string {
  *  "SWE Intern - Summer 2026" and "SWE Intern" match. */
 function normKey(company: string, title: string): string {
   const n = (s: string) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // company: strip legal/branding suffix tokens ("Palantir Technologies" == "Palantir")
+  const co = n(company).split(" ").filter((w) =>
+    !["inc", "llc", "corp", "corporation", "technologies", "technology", "company",
+      "co", "ltd", "plc", "group", "holdings", "an", "ibm"].includes(w)).join(" ");
+  // title: drop season/year/co-op noise, unify internship->intern, then TOKEN-SORT
+  // so "Intern - Software Engineer" == "Software Engineer, Internship"
   const t = n(title)
     .replace(/\b(summer|fall|spring|winter)\b/g, "")
     .replace(/\b20\d\d\b/g, "")
+    .replace(/\binternships?\b/g, "intern")
+    .replace(/\bco ?op\b/g, "")
     .replace(/\s+/g, " ").trim();
-  return `${n(company)}|${t}`;
+  const tokens = Array.from(new Set(t.split(" ").filter(Boolean))).sort();
+  return `${co}|${tokens.join(" ")}`;
 }
 
 /** Find an existing job that is the same posting under a different URL/id. */
@@ -64,15 +73,19 @@ async function dedupJobs(db: D1Database, apply: boolean): Promise<{ groups: numb
   // richness score → the keeper is the highest-scoring row in a group
   const rich = (r: JobRow) =>
     (["found", "todo", "not_applying"].includes(r.phase) ? 0 : 10000) +   // user-advanced phase
+    (r.phase === "not_applying" ? 5000 : 0) +   // a dismissal is user state — keep it over a plain found row
     (hasArt.has(r.id) ? 4000 : 0) +
     ((r.notes ?? "").trim() ? 2000 : 0) +
     (r.bucket ? 1000 : 0) +
     ((r.requirements ?? "").trim() ? 400 : 0) +
     ((r.description ?? "").trim() ? 300 : 0) +
     (r.match_score ?? 0);
-  // a row is safe to delete only if it carries no user state
+  // a row is safe to delete only if it carries no user state. not_applying rows
+  // with no notes/bucket/docs count as safe too — a dismissed duplicate carries
+  // no information the keeper doesn't; applied/oa/interview/etc are NEVER removed.
   const untouched = (r: JobRow) =>
-    ["found", "todo"].includes(r.phase) && !(r.notes ?? "").trim() && !r.bucket && !hasArt.has(r.id);
+    ["found", "todo", "not_applying"].includes(r.phase) &&
+    !(r.notes ?? "").trim() && !r.bucket && !hasArt.has(r.id);
 
   let dupGroups = 0, removable = 0, removed = 0;
   for (const g of groups.values()) {
