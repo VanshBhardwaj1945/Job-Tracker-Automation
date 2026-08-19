@@ -146,6 +146,13 @@ For EACH job the user sends, return:
   ≤ 35; title-only (no description) ≤ 55 — uncertainty is not a reason to score high. Only
   genuinely in-lane roles matching their projects/certs reach 85+. Expect a healthy handful of
   in-lane roles at 85+, with most jobs landing 35-70.
+  UMBRELLA / POOL POSTINGS (exception to the generic cap): many intern/new-grad reqs are
+  INTENTIONALLY generic — the company pools applicants and matches them to a team after
+  applying, or the description explicitly lists MULTIPLE focus areas/tracks. Do NOT apply the
+  generic cap IF one of the listed tracks (or the pool's plausible team set) covers an in-lane
+  area for the candidate: score as if applying INTO the best-fitting listed track, name that
+  track in match_reason, and apply at most a small (~-5) uncertainty deduction instead of the
+  cap. Only cap a posting as generic when it is broad AND gives no in-lane track signal at all.
 - Respect any logistics stated in the candidate's profile (location/relocation, work
   authorization, clearance eligibility). Do NOT invent blockers the profile doesn't state, and
   don't penalize a role for a requirement the candidate already meets or is willing to meet.

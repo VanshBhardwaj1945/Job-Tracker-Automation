@@ -14,6 +14,7 @@ Contract: every scraper returns list[dict] of raw postings
 so the caller can track consecutive failures per company.
 """
 
+import json
 import logging
 import os
 import re
@@ -351,6 +352,70 @@ def scrape_simplify(seasons=("2027", "2026")):
     return None
 
 
+# ── Simplify curated top-lists (simplify.jobs/top-list/<slug>) ────────────────
+_NEXT_DATA_RE = re.compile(
+    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S)
+
+
+def scrape_simplify_toplists():
+    """Simplify's curated top-list pages (e.g. FAANG-Software-Internships).
+
+    The pages are server-rendered Next.js — __NEXT_DATA__ embeds every job hit
+    with real requirements text, salary range, H1B sponsorship, and an `active`
+    flag. One GET per slug, no key, no JS rendering. Slugs configurable via
+    SIMPLIFY_TOPLISTS (comma-separated)."""
+    slugs = [s.strip() for s in
+             os.environ.get("SIMPLIFY_TOPLISTS", "FAANG-Software-Internships").split(",")
+             if s.strip()]
+    jobs = []
+    for slug in slugs:
+        try:
+            r = SESSION.get(f"https://simplify.jobs/top-list/{slug}", timeout=30)
+            if r.status_code != 200:
+                log.warning(f"simplify_toplist/{slug}: HTTP {r.status_code}")
+                continue
+            m = _NEXT_DATA_RE.search(r.text)
+            if not m:
+                log.warning(f"simplify_toplist/{slug}: no __NEXT_DATA__ found")
+                continue
+            hits = (json.loads(m.group(1)).get("props", {})
+                    .get("pageProps", {}).get("initialJobHits", []))
+            n = 0
+            for h in hits:
+                if not h.get("active") or h.get("visible") is False:
+                    continue
+                company = ((h.get("job") or {}).get("company") or {}).get("name", "")
+                if not company:
+                    continue
+                # Context line so the AI matcher sees comp/visa signal upfront.
+                bits = []
+                lo, hi, per = h.get("min_salary"), h.get("max_salary"), h.get("salary_period")
+                if lo or hi:
+                    unit = "/hr" if per == 1 else "/yr"
+                    bits.append(f"Pay: ${lo or '?'}-${hi or '?'}{unit}")
+                h1b = h.get("sponsors_h1b")
+                if h1b is not None:
+                    bits.append(f"Sponsors H1B: {'yes' if h1b else 'no'}")
+                body = " ".join(
+                    x for part in (h.get("requirements"), h.get("responsibilities"))
+                    if part for x in (part if isinstance(part, list) else [str(part)]))
+                desc = (" · ".join(bits) + "\n" if bits else "") + body
+                jobs.append({
+                    "title": h.get("title", ""),
+                    "location": "; ".join(
+                        l.get("value", "") for l in (h.get("locations") or [])[:3]),
+                    "url": h.get("url", ""),
+                    "description": desc[:5000],
+                    "company": company,
+                    "date_posted": h.get("start_date") or h.get("updated_date"),
+                })
+                n += 1
+            log.info(f"simplify_toplist/{slug}: {n} active listing(s)")
+        except Exception as e:
+            log.warning(f"simplify_toplist/{slug}: {e}")
+    return jobs or None
+
+
 # ── Extra open job APIs (aggregators / boards beyond ATS + Simplify) ─────────
 # All fail-soft. The keyed ones no-op cleanly when their env vars are absent.
 
@@ -474,6 +539,7 @@ EXTRA_FEEDS = (
     ("remotive", scrape_remotive),
     ("usajobs", scrape_usajobs),
     ("adzuna", scrape_adzuna),
+    ("simplify_toplist", scrape_simplify_toplists),
 )
 
 

@@ -104,7 +104,16 @@ async function siteText(env: Env): Promise<string> {
 const COMMON = `Using ONLY real facts from the candidate's materials above (resume, extra profile context, live site, GitHub) — never invent experience, metrics, tools, dates, or names — produce the
 document below, tailored to the specific job. Mirror the posting's exact keywords where truthful.
 No fluff, no filler adjectives. After the first draft, the user may ask for tweaks — apply them and
-always output the FULL updated document each time, not a diff.`;
+always output the FULL updated document each time, not a diff.
+
+GENERIC / UMBRELLA POSTINGS: many intern and early-career job descriptions are INTENTIONALLY
+generic — the company pools applicants and matches each hire's skills to a team AFTER applying, or
+the posting explicitly lists multiple focus areas/tracks/interests. Do NOT tailor to the generic
+surface or spread thin across every listed track. Pick the 1-2 listed focus areas (or plausible
+pool teams) closest to the candidate's strongest materials and tailor the whole document as if
+applying INTO that track, keeping the posting's umbrella vocabulary where truthful. State which
+track you aimed at in the WHY trailer. A broad posting is an OPPORTUNITY to steer toward the
+candidate's strengths, not a reason to write a generic document.`;
 
 const INSTRUCTIONS: Record<GenKind, string> = {
   resume: `You are the candidate's resume writer. Produce a FULL one-page resume TAILORED to the job below.
