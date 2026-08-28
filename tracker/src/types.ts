@@ -16,7 +16,7 @@ export interface Env {
 // actually submitted, kept in R2 so you can review it before an interview.
 export const DOC_KINDS = [
   "resume", "cover_letter", "interview_prep", "app_answers",
-  "upload_resume", "upload_cover_letter", "upload_other",
+  "upload_resume", "upload_cover_letter", "upload_other", "upload_briefing",
 ] as const;
 export type DocKind = (typeof DOC_KINDS)[number];
 

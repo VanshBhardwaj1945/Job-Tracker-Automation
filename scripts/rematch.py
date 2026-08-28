@@ -9,6 +9,7 @@ bot challenge). Fail-open: any error just stops the loop cleanly.
 
 Usage: python scripts/rematch.py   (env: TRACKER_URL, TRACKER_CLIENT_ID/SECRET)
 """
+import os
 import sys, time
 from pathlib import Path
 
@@ -20,12 +21,21 @@ def main() -> None:
     if not tracker_client.enabled():
         print("tracker not configured (TRACKER_* secrets missing) — nothing to do")
         return
-    total = 0
-    for i in range(1, 61):  # hard cap; each round handles ~8 jobs
-        res = tracker_client.rematch_all()
+    total, misses = 0, 0
+    for i in range(1, 101):  # hard cap; each round handles ~8 jobs
+        # REMATCH_ALL=1 (workflow env) re-scores EVERY row, not just unscored —
+        # needed when the rubric/schema changes (e.g. the like_score axis).
+        res = tracker_client.rematch_all(all_jobs=os.environ.get("REMATCH_ALL") == "1")
         if not res:
-            print(f"round {i}: no response — stopping")
-            break
+            # a timeout does NOT mean the chunk failed — the worker keeps
+            # processing server-side. Back off and retry instead of quitting.
+            misses += 1
+            print(f"round {i}: no response (miss {misses}/5) — backing off")
+            if misses >= 5:
+                break
+            time.sleep(20)
+            continue
+        misses = 0
         rescored = res.get("rescored", 0)
         remaining = res.get("remaining", 0)
         total += rescored

@@ -14,6 +14,7 @@ Contract: every scraper returns list[dict] of raw postings
 so the caller can track consecutive failures per company.
 """
 
+import html
 import json
 import logging
 import os
@@ -322,33 +323,46 @@ def scrape_google():
 
 # ── Simplify crowd-sourced feed (SimplifyJobs/Summer20XX-Internships) ─────────
 def scrape_simplify(seasons=("2027", "2026")):
-    """Thousands of contributors surface postings within hours — the single
-    widest net we have. Covers Meta, Apple, and every company not in our registry."""
+    """Community GitHub internship lists — the single widest net we have.
+    Covers Meta, Apple, and every company not in our registry. Two repos share
+    the same listings.json schema: SimplifyJobs (Pitt CSC, the big one) and
+    vanshb03 (CSCareers community — different contributors, postings sometimes
+    land there first). Merged and deduped by URL."""
+    repos = ("SimplifyJobs", "vanshb03")
     for season in seasons:
-        url = (f"https://raw.githubusercontent.com/SimplifyJobs/"
-               f"Summer{season}-Internships/dev/.github/scripts/listings.json")
-        try:
-            r = SESSION.get(url, timeout=30)
-            if r.status_code != 200:
-                continue
-            jobs = []
-            for j in r.json():
-                if not j.get("active", True):
+        jobs, seen_urls = [], set()
+        for owner in repos:
+            url = (f"https://raw.githubusercontent.com/{owner}/"
+                   f"Summer{season}-Internships/dev/.github/scripts/listings.json")
+            try:
+                r = SESSION.get(url, timeout=30)
+                if r.status_code != 200:
                     continue
-                if j.get("is_visible") is False:
-                    continue
-                jobs.append({
-                    "title": j.get("title", ""),
-                    "location": "; ".join(j.get("locations", [])[:3]),
-                    "url": j.get("url", ""),
-                    "description": " ".join(j.get("terms", [])),
-                    "company": j.get("company_name", ""),
-                    "date_posted": j.get("date_posted"),
-                })
-            log.info(f"simplify: Summer{season} feed → {len(jobs)} active listings")
+                added = 0
+                for j in r.json():
+                    if not j.get("active", True):
+                        continue
+                    if j.get("is_visible") is False:
+                        continue
+                    u = j.get("url", "")
+                    key = u.split("?")[0].rstrip("/").lower()
+                    if not u or key in seen_urls:
+                        continue
+                    seen_urls.add(key)
+                    jobs.append({
+                        "title": j.get("title", ""),
+                        "location": "; ".join(j.get("locations", [])[:3]),
+                        "url": u,
+                        "description": " ".join(j.get("terms", []) or ([j["season"]] if j.get("season") else [])),
+                        "company": j.get("company_name", ""),
+                        "date_posted": j.get("date_posted"),
+                    })
+                    added += 1
+                log.info(f"simplify: {owner}/Summer{season} → {added} active listing(s)")
+            except Exception as e:
+                log.warning(f"simplify {owner}/Summer{season}: {e}")
+        if jobs:
             return jobs
-        except Exception as e:
-            log.warning(f"simplify Summer{season}: {e}")
     return None
 
 
@@ -533,6 +547,121 @@ def scrape_adzuna(pages: int = 2, what: str = "intern"):
         return None
 
 
+# ── YC startup internships (Work at a Startup is login-walled; this isn't) ───
+# The WaaS search (the only interface with an internship filter) hides its
+# Algolia jobs index behind login, BUT two public surfaces compose into a feed:
+#   1. ycombinator.com/companies ships a fresh public Algolia search key for
+#      YCCompany_production in an inline `AlgoliaOpts` blob (the key ROTATES —
+#      scrape it every run, never hardcode it; a stale key 403s).
+#   2. ycombinator.com/companies/<slug>/jobs is server-rendered Inertia: the
+#      `data-page` attribute holds jobPostings JSON with a typed `type` field
+#      ("Internship"/"Full-time"/...). The public /jobs directory pages surface
+#      ~0 internships, so per-company pages are the way.
+# Gated on YC_DAILY=1 — ~60 page fetches/run is too heavy for the hourly
+# monitor and postings don't churn that fast; run it on a daily-ish cron.
+
+# Query terms used to find hiring YC companies — tune to YOUR lanes via the
+# YC_QUERIES env var (comma-separated).
+_YC_QUERIES = tuple(
+    q.strip() for q in os.environ.get(
+        "YC_QUERIES",
+        "security, identity access management, AI agents, "
+        "developer tools, AI infrastructure, cybersecurity").split(",") if q.strip())
+_YC_DATA_PAGE_RE = re.compile(r'data-page="([^"]*)"')
+
+
+# SESSION defaults to Accept: application/json, which YC's HTML routes 406.
+_YC_HTML_HEADERS = {"Accept": "text/html,application/xhtml+xml"}
+
+
+def _yc_algolia_opts():
+    r = SESSION.get("https://www.ycombinator.com/companies",
+                    headers=_YC_HTML_HEADERS, timeout=20)
+    r.raise_for_status()
+    m = re.search(r'AlgoliaOpts = (\{.*?\})', r.text)
+    return json.loads(m.group(1)) if m else None
+
+
+def scrape_yc_startups():
+    """YC startup internship postings via public company pages. Daily-gated."""
+    if os.environ.get("YC_DAILY") != "1":
+        return None  # hourly runs skip — see the cadence note above
+    try:
+        opts = _yc_algolia_opts()
+        if not opts:
+            log.warning("yc_startups: AlgoliaOpts blob not found on /companies")
+            return None
+        app, key = opts["app"], opts["key"]
+    except Exception as e:
+        log.warning(f"yc_startups: key scrape failed: {e}")
+        return None
+
+    # Enumerate hiring companies for the query terms (slug -> blurb for context).
+    slugs, blurbs = [], {}
+    for q in _YC_QUERIES:
+        try:
+            r = SESSION.post(
+                f"https://{app.lower()}-dsn.algolia.net/1/indexes/YCCompany_production/query",
+                json={"query": q, "hitsPerPage": 25,
+                      "facetFilters": [["isHiring:true"]],
+                      "attributesToRetrieve": ["name", "slug", "one_liner", "batch"]},
+                headers={"X-Algolia-Application-Id": app, "X-Algolia-API-Key": key},
+                timeout=15)
+            r.raise_for_status()
+            for h in r.json().get("hits", []):
+                s = h.get("slug")
+                if s and s not in blurbs:
+                    slugs.append(s)
+                    blurbs[s] = (h.get("name") or s,
+                                 h.get("one_liner") or "", h.get("batch") or "")
+        except Exception as e:
+            log.warning(f"yc_startups: company query '{q}': {e}")
+        time.sleep(0.3)
+
+    cap = int(os.environ.get("YC_MAX_COMPANIES", "60"))
+    slugs = slugs[:cap]
+    jobs, pages_ok = [], 0
+    for s in slugs:
+        try:
+            r = SESSION.get(f"https://www.ycombinator.com/companies/{s}/jobs",
+                            headers=_YC_HTML_HEADERS, timeout=20)
+            if r.status_code != 200:
+                continue
+            m = _YC_DATA_PAGE_RE.search(r.text)
+            if not m:
+                continue
+            props = json.loads(html.unescape(m.group(1))).get("props", {})
+            pages_ok += 1
+            name, one_liner, batch = blurbs.get(s, (s, "", ""))
+            for j in props.get("jobPostings", []):
+                title = j.get("title") or ""
+                if j.get("type") != "Internship" and "intern" not in title.lower():
+                    continue
+                path = j.get("url") or ""
+                if not path:
+                    continue
+                bits = [b for b in (
+                    f"YC {batch}".strip() if batch else "",
+                    one_liner,
+                    f"Pay: {j['salaryRange']}" if j.get("salaryRange") else "",
+                    f"Visa: {j['visa']}" if j.get("visa") else "",
+                    f"Role: {j['prettyRole']} / {j['roleSpecificType']}"
+                    if j.get("prettyRole") else "") if b]
+                jobs.append({
+                    "title": title,
+                    "location": j.get("location") or "",
+                    "url": "https://www.ycombinator.com" + path,
+                    "description": " · ".join(bits)[:5000],
+                    "company": name,
+                })
+        except Exception as e:
+            log.warning(f"yc_startups/{s}: {e}")
+        time.sleep(0.5)
+    log.info(f"yc_startups: {len(jobs)} internship(s) across "
+             f"{pages_ok}/{len(slugs)} company page(s)")
+    return jobs or None
+
+
 # All extra feeds, in call order (keyed ones self-skip without env).
 EXTRA_FEEDS = (
     ("themuse", scrape_themuse),
@@ -540,6 +669,7 @@ EXTRA_FEEDS = (
     ("usajobs", scrape_usajobs),
     ("adzuna", scrape_adzuna),
     ("simplify_toplist", scrape_simplify_toplists),
+    ("yc_startups", scrape_yc_startups),
 )
 
 

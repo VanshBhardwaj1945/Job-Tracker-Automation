@@ -46,6 +46,13 @@ Edit `data/profile.json`:
 Drop your resume in as `data/resume.md` (plain markdown — this is what tailored
 documents are generated from; nothing is ever invented).
 
+Optionally add a `preferences.md` at the repo root — free text describing the
+company tiers you care about, the product/industry areas you're drawn to, and
+the role types you prefer. `scripts/sync_profile.py` pushes it into the tracker,
+and the AI uses it for a separate **Like** (desirability) score on every job,
+fully independent of the skills-fit match score. Without it, every job scores a
+neutral 60 and the tiers behave like a single-axis tracker.
+
 Optionally list specific companies to watch directly:
 
 ```bash
@@ -177,15 +184,32 @@ the document context.
 
 These just work out of the box:
 
-- **0–100 AI match** + apply-now tiers (Top ≥85 / Recommended ≥70 / Take a look ≥50),
-  an estimated **Pay** tier, and a **deep-insights** panel that reads your own
+- **Three scoring axes per job**: a 0–100 **AI match** (skills fit), a 0–100
+  **Like** score (desirability, from your optional `preferences.md` — neutral
+  without it), and an estimated **Pay** tier. The apply-now tiers (Top /
+  Recommended / For you / Take a look) gate on **both** match and like, and the
+  rank sort blends all three; a **deep-insights** panel reads your own
   application history (fit quality, focus, conversion, momentum, follow-ups).
+- **An internship gate** — clearly full-time/new-grad postings (seniority
+  titles, years-of-experience bars, six-figure annual salaries) are dropped
+  before alerting; anything ambiguous passes. Optionally set
+  `LANE_EXCLUDE_SOC_GRC=1` to also drop unambiguously pure SOC-analyst /
+  GRC / compliance / audit titles (off by default — it encodes a preference
+  for engineering/build roles).
+- **Drag-and-drop documents** — drop PDFs, DOCX, or `.md` files (several at
+  once) onto a job's Documents section; each is kind-sorted by filename
+  (resume / cover letter / briefing note) and saved instantly. PDFs and DOCX
+  view **inline** (real pages, not extracted text); `.md` briefings render as a
+  styled reading page. Notes **autosave** as you type.
 - **Favorite buckets** — star any job into lists you name yourself ("Dream jobs" …).
 - **Light / dark mode** toggle (bottom-left), remembered per browser.
 - **Customizable dashboard** — on Analytics, hit *Customize layout* to drag panels
   and resize their width; the layout saves to your browser.
 - Matching uses a **mid-tier model** by default (`AI_MODEL` overrides it) — prompt
   caching keeps the cost low.
+- **Full re-score on demand** — dispatch the Job Monitor workflow in `rematch`
+  mode to re-score every tracked job (it sets `REMATCH_ALL=1`); do this after
+  changing your profile, preferences, or the scoring rubric.
 
 ## 7. LinkedIn via Apify (optional, OFF by default, bring your own token)
 
@@ -210,6 +234,40 @@ day** (LinkedIn actors burn credit fast — never put one on an hourly loop):
 
 Dedupe is already handled downstream (seen-jobs store + tracker id), so a daily
 LinkedIn sweep coexists fine with the hourly open-API feeds.
+
+## 8. Handshake job alerts (optional, for students)
+
+If your school uses [Handshake](https://joinhandshake.com), its job-alert
+emails can feed the tracker — no scraping, no extra credentials:
+
+1. In Handshake: **Settings → Notifications**, set your job-alert interests and
+   turn on **"New jobs: Email"**.
+2. Make sure those alerts land in the **same Gmail inbox** the gmail watcher
+   reads (`EMAIL_SENDER`) — school accounts often default to the school address,
+   so check where Handshake actually sends.
+
+That's it. The watcher recognizes the Handshake sender domain (end-anchored, so
+lookalike domains are rejected), extracts the postings with the AI, unwraps the
+click-tracking links, applies the internship gate (Handshake alerts include
+full-time roles), and pushes new jobs into the tracker as Found. Extraction is
+fail-open — a bad email never blocks your application-event classification.
+
+## 9. YC startup internships (optional, $0)
+
+A daily feed of internships at Y Combinator startups, built entirely from
+public pages (no login, no API key). Enable it by setting `YC_DAILY=1` on a
+daily run — the workflow ships a `yc` dispatch mode and a commented daily cron:
+
+```yaml
+YC_DAILY: "1"            # the gate — hourly runs skip the feed entirely
+YC_QUERIES: "security, developer tools, AI infrastructure"   # optional: your lanes
+YC_MAX_COMPANIES: "60"   # optional: page-fetch cap per run
+```
+
+It queries YC's public company search for hiring companies matching your terms,
+reads each company's public jobs page, and keeps the internship postings. Keep
+it on a daily cadence — it's ~60 page fetches per run, which is pointless
+hourly and impolite always.
 
 ## Notes
 

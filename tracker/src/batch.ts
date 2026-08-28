@@ -10,7 +10,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import {
-  applyMatches, buildMatchSystem, matchListing, normalizeMatchItem,
+  applyMatches, buildMatchSystem, getPreferences, matchListing, normalizeMatchItem,
   parseMatchReply, MATCH_MODEL, type MatchInput, type MatchResult,
 } from "./match";
 import { logUsage } from "./usage";
@@ -32,7 +32,7 @@ export async function submitRematchBatch(
 ): Promise<{ batch_id: string; count: number }> {
   if (!profile || !jobs.length) return { batch_id: "", count: 0 };
   const client = new Anthropic({ apiKey });
-  const system = [{ type: "text" as const, text: buildMatchSystem(profile), cache_control: { type: "ephemeral" as const } }];
+  const system = [{ type: "text" as const, text: buildMatchSystem(profile, await getPreferences(db)), cache_control: { type: "ephemeral" as const } }];
   const batch = await client.messages.batches.create({
     requests: jobs.map((j) => ({
       custom_id: j.id,

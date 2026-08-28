@@ -113,6 +113,15 @@ const MIGRATIONS: string[][] = [
   [
     `ALTER TABLE jobs ADD COLUMN posted_at TEXT`,
   ],
+  // v11: desirability axis, separate from fit. like_score 0-100 = how much the
+  // candidate would WANT the job (derived from the optional `preferences` meta
+  // key: company tier / product type / role type); like_reason = the one-line
+  // why. Tier tabs gate on BOTH match AND like; legacy `likeability` stays the
+  // 1-10 pay tier.
+  [
+    `ALTER TABLE jobs ADD COLUMN like_score INTEGER`,
+    `ALTER TABLE jobs ADD COLUMN like_reason TEXT NOT NULL DEFAULT ''`,
+  ],
 ];
 
 let migrated = false;

@@ -21,6 +21,7 @@ Usage:
 import argparse
 import hashlib
 import json
+import os
 import re
 import logging
 import sys
@@ -68,6 +69,27 @@ def make_job_id(company, title, url):
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
+# ── Cross-source posting identity ────────────────────────────────────────────
+# Job ids hash company|title|URL, so the same posting listed by two feeds with
+# different URLs looks "new" and re-alerts. norm_key gives a URL-independent
+# identity — keep the logic IN SYNC with normKey() in tracker/src/api.ts
+# (company legal-suffix strip + title token-sort).
+_NK_SUFFIX = {"inc", "llc", "corp", "corporation", "technologies", "technology",
+              "company", "co", "ltd", "plc", "group", "holdings", "an", "ibm"}
+
+def norm_key(company, title):
+    def n(x):
+        return re.sub(r"[^a-z0-9]+", " ", str(x or "").lower()).strip()
+    co = " ".join(w for w in n(company).split() if w not in _NK_SUFFIX)
+    t = n(title)
+    t = re.sub(r"\b(summer|fall|spring|winter)\b", "", t)
+    t = re.sub(r"\b20\d\d\b", "", t)
+    t = re.sub(r"\binternships?\b", "intern", t)
+    t = re.sub(r"\bco ?op\b", "", t)
+    tokens = sorted(set(t.split()))
+    return co + "|" + " ".join(tokens)
+
+
 _WATCHSET = None
 
 
@@ -102,6 +124,67 @@ def extract_term(*texts) -> str:
         if label not in out:
             out.append(label)
     return ", ".join(out[:3])
+
+
+# ── Internship gate ───────────────────────────────────────────────────────────
+# This is an INTERNSHIP monitor; full-time / new-grad roles occasionally leak in
+# from broad feeds. Drop a posting only when it is CLEARLY full-time: it shows a
+# full-time signal AND carries no internship signal anywhere. Ambiguous postings
+# pass (fail-open) — the matcher still judges them.
+INTERN_SIGNAL_RE = re.compile(
+    r"\b(intern|internship|co-?op|co op|student|apprentice|apprenticeship|"
+    r"campus|early career|summer analyst|summer associate|"
+    r"university\b.{0,20}\bprogram)\b", re.IGNORECASE)
+# seniority in the title, an explicit years-of-experience bar, or a six-figure
+# ANNUAL salary (interns are paid hourly/monthly) all mean full-time.
+FULLTIME_TITLE_RE = re.compile(
+    r"\b(senior|staff|principal|\blead\b|sr\.?|manager|director|architect|"
+    r"head of|vice president|\bvp\b|new grad|entry.level|full.time)\b", re.IGNORECASE)
+FULLTIME_BODY_RE = re.compile(
+    r"(\b\d{1,2}\+?\s*years?\b[^.]{0,30}\bexperience\b"
+    r"|\bminimum\s+of\s+\d+\s+years\b"
+    r"|\$\s?(?:9\d|1\d\d|2\d\d),?\d{3}\b)", re.IGNORECASE)  # $123,000 or $123000
+
+
+def is_full_time(title: str, description: str = "") -> bool:
+    """True only when a posting is CLEARLY a full-time / new-grad role (no
+    internship wording + a positive full-time signal). Fail-open on ambiguity."""
+    t = title or ""
+    if INTERN_SIGNAL_RE.search(t) or INTERN_SIGNAL_RE.search((description or "")[:600]):
+        return False
+    return bool(FULLTIME_TITLE_RE.search(t)
+                or FULLTIME_BODY_RE.search((description or "")[:1200]))
+
+
+# ── Optional lane gate: drop PURE SOC / GRC / compliance / audit titles ───────
+# OPT-IN via LANE_EXCLUDE_SOC_GRC=1 (default OFF — it encodes a preference, not
+# a universal rule): for candidates targeting engineering/build/SRE roles who do
+# NOT want pure "watch alerts" SOC-analyst or governance/compliance/audit roles.
+# VERY CONSERVATIVE by design: rather let a borderline SOC/GRC role through (one
+# click to dismiss) than false-drop a real job. Only unambiguous titles are
+# listed — "security analyst", "risk analyst", "compliance intern", "controls
+# analyst" are DELIBERATELY excluded (too broad; they pass for hand-triage).
+# Even a listed title is dropped only when it carries no build signal
+# (engineer/developer/SWE/DevOps/SRE/platform).
+PURE_SOC_GRC_RE = re.compile(
+    r"\b(soc analyst|security operations center analyst|"
+    r"\bgrc\b|governance,?\s*risk,?\s*(and\s*)?compliance|"
+    r"compliance analyst|it audit|internal audit|audit intern|"
+    r"information assurance analyst)\b", re.IGNORECASE)
+BUILD_SIGNAL_RE = re.compile(
+    r"\b(engineer|developer|\bswe\b|software|devops|devsecops|\bsre\b|"
+    r"site reliab|platform|detection engineer|automation engineer|"
+    r"infrastructure)\b", re.IGNORECASE)
+
+
+def is_pure_soc_grc(title: str) -> bool:
+    """True when the lane gate is enabled AND the title is fundamentally a
+    SOC-analyst / GRC / compliance / audit role with no engineering/building
+    signal. Title-only (conservative). No-op unless LANE_EXCLUDE_SOC_GRC=1."""
+    if os.environ.get("LANE_EXCLUDE_SOC_GRC") != "1":
+        return False
+    t = title or ""
+    return bool(PURE_SOC_GRC_RE.search(t)) and not bool(BUILD_SIGNAL_RE.search(t))
 
 
 def _norm_posted(v):
@@ -250,14 +333,43 @@ def run(dry_run=False):
         if n:
             log.info(f"  {src_name}: {n} match(es)")
 
+    # ── Internship gate ───────────────────────────────────────────────────────
+    # Drop clearly full-time / new-grad roles (fail-open on ambiguity).
+    before_ft = len(all_found)
+    all_found = [j for j in all_found
+                 if not is_full_time(j.get("title", ""), j.get("description", ""))]
+    if before_ft - len(all_found):
+        log.info(f"internship gate: dropped {before_ft - len(all_found)} full-time posting(s)")
+
+    # ── Optional lane gate (LANE_EXCLUDE_SOC_GRC=1): pure SOC/GRC/compliance ──
+    before_lane = len(all_found)
+    all_found = [j for j in all_found if not is_pure_soc_grc(j.get("title", ""))]
+    if before_lane - len(all_found):
+        log.info(f"lane gate: dropped {before_lane - len(all_found)} pure SOC/GRC/compliance posting(s)")
+
     # ── Dedupe ────────────────────────────────────────────────────────────────
+    # Two layers: exact id (company|title|url hash) AND norm_key (URL-independent),
+    # so the same posting surfacing from another feed with a different URL is
+    # NOT treated as new. Historical norm_keys are computed from the stored
+    # company/title of every seen entry — no data migration needed.
     seen_ids = {j["id"] for j in seen_data.get("jobs", [])}
+    seen_keys = {norm_key(j.get("company"), j.get("title"))
+                 for j in seen_data.get("jobs", [])}
     is_baseline = not seen_ids
-    new_jobs, run_ids = [], set()
+    new_jobs, run_ids, run_keys = [], set(), set()
+    dup_by_key = 0
     for job in all_found:
-        if job["id"] not in seen_ids and job["id"] not in run_ids:
-            run_ids.add(job["id"])
-            new_jobs.append(job)
+        if job["id"] in seen_ids or job["id"] in run_ids:
+            continue
+        key = norm_key(job.get("company"), job.get("title"))
+        if key in seen_keys or key in run_keys:
+            dup_by_key += 1
+            continue  # same posting, different URL — not new
+        run_ids.add(job["id"])
+        run_keys.add(key)
+        new_jobs.append(job)
+    if dup_by_key:
+        log.info(f"cross-source dedupe: suppressed {dup_by_key} repeat posting(s) with new URLs")
 
     log.info(f"\nTotal matches: {len(all_found)} | New: {len(new_jobs)}")
 

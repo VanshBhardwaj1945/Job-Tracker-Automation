@@ -135,11 +135,15 @@ interface JobRow {
 }
 
 const SORTS: Record<string, string> = {
-  // triage order: blended fit — match dominates (70%), pay tier (1-10, x10 to
-  // the 0-100 scale, 30%) pulls its weight: match 70/pay 7 beats match 80/pay 4.
-  // Unmatched rows always sink below matched ones.
-  rank: `(match_score IS NULL) ASC, (COALESCE(match_score, 0) * 0.7 + COALESCE(likeability, 0) * 3.0) DESC, COALESCE(ai_score, -1) DESC, updated_at DESC`,
+  // Rows with ONLY a pre-score slot in at ai_score x 0.9 (same 0-100 scale,
+  // slightly discounted as title-only) instead of sinking to the bottom —
+  // a fresh 80 pre-score belongs above a matched 50, not below every matched row.
+  // Rows with no score at all still sink last.
+  // Blend: match 55%, like 30% (0-100), pay 15% (1-10 x10). like falls
+  // back to the blended pre-score for unscored rows so fresh finds rank sanely.
+  rank: `(COALESCE(match_score, ai_score) IS NULL) ASC, (COALESCE(match_score, COALESCE(ai_score, 0) * 0.9) * 0.55 + COALESCE(like_score, COALESCE(match_score, COALESCE(ai_score, 0) * 0.9) * 0.8) * 0.30 + COALESCE(likeability, 0) * 1.5) DESC, updated_at DESC`,
   match: `COALESCE(match_score, -1) DESC, COALESCE(ai_score, -1) DESC, updated_at DESC`,
+  like: `COALESCE(like_score, -1) DESC, COALESCE(match_score, -1) DESC, updated_at DESC`,
   pay: `COALESCE(likeability, -1) DESC, COALESCE(match_score, -1) DESC, updated_at DESC`,
   updated: "updated_at DESC",
   created: "created_at DESC",
@@ -150,16 +154,32 @@ const SORTS: Record<string, string> = {
   company: "company COLLATE NOCASE ASC, title ASC",
 };
 
-// Triage tiers over Found, by profile match score:
-// top = in your lane (apply first), rec = strong, look = worth a skim.
+// Triage tiers over Found:
+// top = in your lane (apply first), rec = strong, foryou = solid fits,
+// look = worth a skim. match_score is 0-100.
+// Fresh monitor rows carry only a title-based pre-score (ai_score) until the
+// background matcher reaches them (~8/push; weekly digest sweeps the rest).
+// Tiers fall back to the pre-score discounted x0.9 (same blend as SORTS.rank),
+// so a 68 pre lands in "For you" immediately and self-corrects when the full
+// match arrives.
+const TIER_SCORE = "COALESCE(match_score, ai_score * 0.9)";
+// Dual-gate tiers: a tab needs BOTH a skills fit (match) AND desirability
+// (like). Fully-scored rows use the gates; rows the matcher hasn't reached yet
+// (like_score NULL) fall back to the blended pre-score bands so fresh finds
+// still surface, then snap to gates on scoring.
+// Rec exception: like >= 85 (dream company) only needs match >= 70.
+const GATED = (m: number, l: number, hi = "") =>
+  `(like_score IS NOT NULL AND match_score >= ${m} AND like_score >= ${l}${hi})`;
+const UNSCORED = (lo: number, hi?: number) =>
+  `(like_score IS NULL AND ${TIER_SCORE} ${hi != null ? `BETWEEN ${lo} AND ${hi}` : `>= ${lo}`})`;
 const TIER_WHERE: Record<string, string> = {
-  top: "phase = 'found' AND match_score >= 85",
-  rec: "phase = 'found' AND match_score BETWEEN 70 AND 84",
-  foryou: "phase = 'found' AND match_score BETWEEN 60 AND 69",
-  look: "phase = 'found' AND match_score BETWEEN 50 AND 59",
+  top: `phase = 'found' AND (${GATED(85, 80)} OR ${UNSCORED(85)})`,
+  rec: `phase = 'found' AND ((${GATED(80, 70)} OR (like_score >= 85 AND match_score >= 70)) AND NOT ${GATED(85, 80)} OR ${UNSCORED(70, 84.99)})`,
+  foryou: `phase = 'found' AND (${GATED(65, 60)} AND NOT (${GATED(80, 70)} OR (like_score >= 85 AND match_score >= 70)) OR ${UNSCORED(60, 69.99)})`,
+  look: `phase = 'found' AND (${GATED(55, 55)} AND NOT ${GATED(65, 60)} OR ${UNSCORED(50, 59.99)})`,
 };
 // legacy alias (digest uses recommended=1): rec-or-better
-const RECOMMENDED_WHERE = "phase = 'found' AND match_score >= 70";
+const RECOMMENDED_WHERE = `phase = 'found' AND ((like_score IS NOT NULL AND ((match_score >= 80 AND like_score >= 70) OR (like_score >= 85 AND match_score >= 70))) OR ${TIER_SCORE} >= 70 AND like_score IS NULL)`;
 
 // Category taxonomy (tree + labels) — the UI builds its tri-state filter and
 // monochrome pills from this, so there's one source of truth (types.ts).
@@ -688,7 +708,8 @@ api.post("/jobs/:id/artifacts", async (c) => {
 // List a job's saved documents (metadata only — content fetched on open).
 api.get("/jobs/:id/artifacts", async (c) => {
   const rows = await c.env.DB
-    .prepare(`SELECT id, job_id, kind, format, title, filename, size, created_at
+    .prepare(`SELECT id, job_id, kind, format, title, filename, size, created_at,
+                     (content IS NOT NULL AND content != '') AS has_text
               FROM artifacts WHERE job_id = ? ORDER BY created_at DESC`)
     .bind(c.req.param("id"))
     .all<ArtifactRow>();
@@ -724,7 +745,8 @@ api.get("/artifacts/:aid/file", async (c) => {
   });
 });
 
-// Upload a PDF or DOCX you actually submitted → R2 (kind: upload_resume / upload_cover_letter / upload_other).
+// Upload a PDF/DOCX you actually submitted (→ R2) or a Markdown briefing (→ text).
+// kind: upload_resume / upload_cover_letter / upload_briefing / upload_other.
 api.post("/jobs/:id/upload", async (c) => {
   const id = c.req.param("id");
   const job = await c.env.DB.prepare("SELECT id FROM jobs WHERE id = ?").bind(id).first();
@@ -738,17 +760,34 @@ api.post("/jobs/:id/upload", async (c) => {
   const lower = file.name.toLowerCase();
   const isPdf = file.type === "application/pdf" || lower.endsWith(".pdf");
   const isDocx = file.type === DOCX_MIME || lower.endsWith(".docx");
-  if (!isPdf && !isDocx) return c.json({ error: "only PDF or DOCX uploads are supported" }, 415);
-  const fmt = isDocx ? "docx" : "pdf";
+  const isMd = lower.endsWith(".md") || lower.endsWith(".markdown") || file.type === "text/markdown";
+  if (!isPdf && !isDocx && !isMd)
+    return c.json({ error: "only PDF, DOCX, or Markdown (.md) uploads are supported" }, 415);
   const aid = crypto.randomUUID();
+
+  // Markdown is stored as TEXT in `content` (rendered inline by the UI) — no R2.
+  if (isMd) {
+    const mdText = (await file.text()).slice(0, 200000);
+    await c.env.DB
+      .prepare(`INSERT INTO artifacts (id, job_id, kind, format, title, content, r2_key, filename, size, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(aid, id, kind, "md", (String(form.title ?? "") || file.name).slice(0, 200),
+            mdText, "", file.name.slice(0, 200), file.size, now())
+      .run();
+    return c.json({ id: aid }, 201);
+  }
+
+  const fmt = isDocx ? "docx" : "pdf";
   const key = `uploads/${id}/${aid}.${fmt}`;
   await c.env.DOCS.put(key, await file.arrayBuffer(),
     { httpMetadata: { contentType: isDocx ? DOCX_MIME : "application/pdf" } });
+  // Optional client-extracted text (DOCX preview) — lets the UI show the doc inline.
+  const text = typeof form.text === "string" ? form.text.slice(0, 200000) : "";
   await c.env.DB
-    .prepare(`INSERT INTO artifacts (id, job_id, kind, format, title, r2_key, filename, size, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .prepare(`INSERT INTO artifacts (id, job_id, kind, format, title, content, r2_key, filename, size, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(aid, id, kind, fmt, (String(form.title ?? "") || file.name).slice(0, 200),
-          key, file.name.slice(0, 200), file.size, now())
+          text, key, file.name.slice(0, 200), file.size, now())
     .run();
   return c.json({ id: aid }, 201);
 });
@@ -1213,6 +1252,9 @@ api.put("/meta/:key", async (c) => {
   const key = c.req.param("key");
   const b = await c.req.json<{ value: string }>();
   await setMeta(c.env.DB, key, String(b.value));
+  // `preferences` (optional desirability prefs for like_score) is cached like
+  // the profile — bust the cache on either.
+  if (key === "preferences") clearProfileCache();
   if (key.startsWith("profile_")) {
     clearProfileCache();
     await setMeta(c.env.DB, "sys_last_profile_sync",

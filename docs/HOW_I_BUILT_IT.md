@@ -68,19 +68,35 @@ reach the Worker the same way: Access mints a signed JWT, and the Worker
 
 ---
 
-## 3. Job discovery — three nets, widest to narrowest
+## 3. Job discovery — stacked nets, widest to narrowest
 
-Coverage comes from stacking three sources so nothing slips through:
+Coverage comes from stacking sources so nothing slips through:
 
-1. **A crowd-sourced feed** (the Simplify internship lists) — thousands of
-   contributors surface new postings within hours. Widest net; catches companies
-   with no scrapeable API (e.g. Meta, Apple).
+1. **Crowd-sourced feeds** (the community internship lists on GitHub) — thousands
+   of contributors surface new postings within hours. Widest net; catches
+   companies with no scrapeable API (e.g. Meta, Apple). Two repos sharing the
+   same schema are merged and URL-deduped, so postings that land in either one
+   first are caught.
 2. **ATS APIs** — direct, structured pulls from applicant-tracking systems
    (Greenhouse, Lever, Ashby, SmartRecruiters, Workday, Workable, Recruitee,
    BambooHR). A `classify.py` probe figures out which ATS each company uses and
    caches the answer in a registry, so the scraper never guesses.
 3. **Built-in direct scrapers** — a few big employers (Google, Amazon, etc.)
    have bespoke career APIs handled directly.
+4. **YC startup internships** (optional, `YC_DAILY=1`) — Y Combinator's "Work at
+   a Startup" search is login-walled, but two public surfaces compose into a
+   feed: the companies directory ships a rotating public Algolia search key in
+   an inline config blob (scraped fresh every run — never hardcoded), and each
+   company's public jobs page is server-rendered with typed posting JSON in a
+   `data-page` attribute. Query the index for hiring companies matching your
+   lanes (`YC_QUERIES`), read each jobs page, keep the internships. About 60
+   page fetches per run, so it rides a daily cron, not the hourly one. Costs $0.
+5. **Handshake job alerts** (optional) — if your school uses Handshake, its
+   job-alert emails become a feed: the gmail watcher recognizes the sender
+   domain (end-anchored, so spoof lookalikes fail), routes those emails around
+   the application-email classifier, has the AI extract the postings, unwraps
+   the click-tracking links to real posting URLs, and pushes them through the
+   same idempotent bulk-insert path as every scraper.
 
 Every source is **fail-soft**: one board being down or changing shape never
 takes the run down.
@@ -95,10 +111,25 @@ current-or-future recruiting cycle (**computed from today's date — nothing is
 hardcoded to rot**). Survivors get a coarse category from the profile's keyword
 lists before the LLM refines it.
 
-De-duplication is layered: a per-run `seen_jobs` set (only genuinely new
-postings continue), plus a normalized company+title key in the tracker so the
-same role found on two boards — or found by the monitor *and* added by hand —
-collapses to a single row.
+Two more gates run after the keyword filter:
+
+- **An internship gate** drops postings that are *clearly* full-time or new-grad
+  (a seniority title, an explicit years-of-experience bar, or a six-figure
+  annual salary — interns are paid hourly) while anything ambiguous passes.
+  Broad feeds occasionally mix in full-time roles; this catches them without
+  ever false-dropping a real internship (fail-open on uncertainty).
+- **An optional lane gate** (`LANE_EXCLUDE_SOC_GRC=1`, off by default because it
+  encodes a preference): for candidates targeting engineering/build roles, it
+  drops *unambiguously* pure SOC-analyst / GRC / compliance / audit titles —
+  and only when the title carries no build signal (engineer, developer, SRE,
+  platform). Deliberately conservative: borderline titles pass for hand-triage.
+
+De-duplication is layered: exact job ids in a `seen_jobs` set (only genuinely
+new postings continue), plus a **URL-independent normalized company+title key**
+computed on *both* sides — in the monitor (so the same posting surfacing from a
+second feed under a different URL never re-alerts) and in the tracker (so a
+role found on two boards, or found by the monitor *and* added by hand,
+collapses to a single row).
 
 **A hierarchical category taxonomy.** Categories aren't a flat list — they're a
 three-level tree (top → mid → leaf, e.g. *Security → IAM/Identity → IGA*). The
@@ -135,13 +166,21 @@ net. Key decisions:
   reaching private or cloud-metadata addresses, and its SSRF guard fails closed
   while its threat blocklist fails open. Every stage fails soft: worst case,
   matching degrades to title-only rather than breaking the pipeline.
-- **Profile-aware matching.** Every job is scored **0–100** against the user's
-  synced profile with a calibrated, deliberately harsh, lane-based rubric (a
-  tracker where everything is a 90 is useless) — the score triages into three
-  apply-now tiers. The model also estimates a **pay tier** and extracts the
-  concrete tools/keywords each posting names (aggregated into "what should I learn
-  / build" signal). Matching runs on a **mid-tier model (Sonnet)** for sharper
-  judgment; prompt caching keeps its cost close to the entry tier.
+- **Three-axis scoring.** Conflating "am I qualified" with "do I want it" ruins
+  a tracker (any posting containing your field's buzzword floats to the top), so
+  every job gets three independent scores: **match** (0–100, pure skills-vs-JD
+  fit against the synced profile, with a calibrated, deliberately harsh rubric —
+  a tracker where everything is a 90 is useless), **like** (0–100 desirability,
+  derived from an *optional* `preferences` note you sync — company tier,
+  product/industry interests, role-type preferences; a neutral 60 if you don't
+  provide one), and a **pay tier** (1–10). The apply-now tabs **dual-gate on
+  both match and like** (with a dream-company exception: a very high like only
+  needs a solid match), and the rank sort blends all three. The model also
+  extracts the concrete tools/keywords each posting names (aggregated into
+  "what should I learn / build" signal). Matching runs on a **mid-tier model
+  (Sonnet)** for sharper judgment; prompt caching keeps its cost close to the
+  entry tier. When the rubric or schema changes, the workflow's manual `rematch`
+  mode sets `REMATCH_ALL=1` and re-scores every row, not just unscored ones.
 - **Behaviour-driven analytics.** Beyond pipeline counts, the dashboard mines the
   user's own *application history* to answer the questions that actually change a
   job hunt: is the fit quality of what you apply to trending up or down, are you
@@ -174,6 +213,20 @@ net. Key decisions:
   to a pixel-matched one-page `.docx`; you can also copy the full prompt to run
   on your own Claude subscription for zero API cost, or upload the file you
   actually submitted (stored in R2 for later review).
+- **In-app document handling.** Uploads are a **drag-and-drop zone** — drop
+  several PDFs/DOCX/markdown files at once and each is kind-classified from its
+  *filename* (cover/letter, resume/cv, `.md` becomes a briefing note) and saved
+  instantly. Everything views **inline**: PDFs render in a same-origin iframe
+  (the security middleware carves a `SAMEORIGIN` exception for exactly the
+  file-stream route — every other response stays unframeable), DOCX renders as
+  the *actual paginated document* via a vendored, self-hosted docx-preview
+  bundle served from the Worker itself (the CSP allows same-origin scripts
+  only — no CDNs), zoomed to fit the modal, and `.md` briefings get a styled
+  reading view from a small hand-rolled renderer (headings, fences,
+  blockquotes, lists, rules). A DOCX upload also extracts its text client-side
+  (parsing the ZIP by hand with the native `DecompressionStream` — zero
+  dependencies) as a stored fallback. Job notes **autosave** with a debounce
+  and flush-on-close; no save button.
 
 ## 6. The tracker (edge full-stack)
 
@@ -250,7 +303,7 @@ See [`CLAUDE.md`](../CLAUDE.md) to have Claude Code configure any of these for y
 | `monitor/classify.py` | Probes which ATS a company uses; maintains the registry |
 | `monitor/filters.py` | Intern / seniority / location / cycle filtering + categorization |
 | `monitor/ai_score.py` | Claude relevance scoring against your profile |
-| `monitor/gmail_watch.py` | IMAP inbox watcher → classifies application emails |
+| `monitor/gmail_watch.py` | IMAP inbox watcher → classifies application emails + extracts Handshake job alerts |
 | `monitor/digest.py` | Weekly digest + housekeeping + match self-heal |
 | `monitor/notify.py` | Discord + email delivery |
 | `monitor/tracker_client.py` | Fail-open client for the tracker API |
@@ -265,7 +318,8 @@ See [`CLAUDE.md`](../CLAUDE.md) to have Claude Code configure any of these for y
 | `tracker/src/usage.ts` | Token-usage logging + cost accounting |
 | `tracker/src/ui.html` | The single-page dashboard |
 | `terraform/` | All cloud infrastructure as code |
-| `scripts/sync_profile.py` | Pushes your resume + extra context into the tracker |
+| `scripts/sync_profile.py` | Pushes your resume + extra context (+ optional preferences) into the tracker |
+| `scripts/rematch.py` | Drives rematch-all to completion from Actions (`REMATCH_ALL=1` = full re-score) |
 
 ## 12. Design decisions & trade-offs
 

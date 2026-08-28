@@ -5,7 +5,7 @@
   "description": "Job application tracker — Cloudflare Worker + D1. Deployed by Terraform (../terraform), wrangler is for local dev only.",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --format=esm --outfile=dist/worker.js --loader:.html=text --minify-syntax --external:node:*",
+    "build": "esbuild src/index.ts --bundle --format=esm --outfile=dist/worker.js --loader:.html=text --loader:.txt=text --minify-syntax --external:node:*",
     "check": "tsc --noEmit",
     "dev": "npm run build && wrangler dev"
   },

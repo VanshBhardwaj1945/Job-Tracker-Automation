@@ -80,9 +80,12 @@ def get_stats() -> dict | None:
     return _request("GET", "/api/stats")
 
 
-def rematch_all() -> dict | None:
-    """Queue AI re-matching for active jobs missing match data (after profile sync)."""
-    return _request("POST", "/api/rematch-all", timeout=30)
+def rematch_all(all_jobs: bool = False) -> dict | None:
+    """Queue AI re-matching for active jobs missing match data (after profile sync).
+    all_jobs=True re-scores EVERY row (rubric/schema changes). The worker enriches
+    + scores an 8-job chunk synchronously, which can take well over 30s — keep
+    this timeout generous."""
+    return _request("POST", "/api/rematch-all" + ("?all=1" if all_jobs else ""), timeout=150)
 
 
 def rematch_batch_collect() -> dict | None:

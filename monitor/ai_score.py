@@ -37,9 +37,23 @@ Categories:
 - "relevant_swe" — cloud, DevOps, SRE, infrastructure, platform, backend, distributed systems
 - "other"        — everything else (frontend, mobile, product SWE, data, hardware, non-tech)
 
-Score 0-100 (100 = perfect fit) — same scale as the tracker's match score. Penalize: non-US locations, PhD/MBA-only roles,
-non-student programs, roles unrelated to the profile. A generic "Software Engineer
-Intern" on a security/infra/cloud team should be scored on the team, not the title.
+Score 0-100 (100 = perfect fit) — same scale as the tracker's match score. Penalize:
+locations/programs the profile can't use, PhD/MBA-only roles, non-student programs,
+roles unrelated to the profile. A generic "Software Engineer Intern" on a team
+matching a ranked role type should be scored on the team, not the title.
+
+UMBRELLA / POOL POSTINGS — do NOT generic-cap these: major tech companies often post
+ONE broad intern req ("Software Engineering Intern", "2027 Internships: Software
+Engineering") and pool applicants into teams later, including teams that match the
+ranked role types above. For a broad-titled intern posting at a well-known large tech
+company, score it as applying INTO its best plausible track for this candidate
+(usually 55-70, note "pool req" in the reason) instead of dismissing it as generic.
+Only score a broad title ≤40 when the company is small enough that no ranked-role
+track plausibly exists behind it.
+
+MULTI-TRACK TITLES: one title can feed several of the ranked roles (SRE → platform +
+security; DevSecOps → CI/CD + cloud security). Score on the BEST-fitting ranked role
+the job could lead to, not an average.
 
 Jobs:
 {jobs}

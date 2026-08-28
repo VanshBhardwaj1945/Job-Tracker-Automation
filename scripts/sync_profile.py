@@ -7,6 +7,8 @@ Sources:
   2. extra-context's <extra_context> knowledge block from
      the portfolio site's function_app.py (local
      checkout; override with EXTRA_APP_PATH)        → meta key profile_extra
+  3. preferences.md (repo root, OPTIONAL)           → meta key preferences
+     (desirability preferences — drives like_score; neutral 60 without it)
 
 The tracker's AI match step reads both, so updating either doc + rerunning
 this script makes every future match (and /rematch-all) use the new profile.
@@ -86,6 +88,18 @@ def main() -> int:
         print("ERROR: failed to sync resume to tracker")
         return 1
     print(f"profile_resume synced ({len(resume):,} chars)")
+
+    # Optional: preferences.md (repo root) → meta key `preferences`. Free text
+    # describing company tiers, product/industry interests, and role-type
+    # preferences — drives the tracker's like_score (desirability) axis.
+    # Without it, every job scores a neutral like 60.
+    prefs_file = ROOT / "preferences.md"
+    if prefs_file.exists():
+        prefs = prefs_file.read_text().strip()
+        if prefs and tracker_client.set_meta("preferences", prefs):
+            print(f"preferences synced ({len(prefs):,} chars)")
+        elif prefs:
+            print("WARN: preferences sync failed (profile still synced)")
 
     if not args.resume_only:
         block = extra_block()

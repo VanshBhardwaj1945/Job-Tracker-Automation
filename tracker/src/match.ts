@@ -90,6 +90,8 @@ export interface MatchResult {
   match_reason: string;
   skills: string[];
   likeability: number | null;
+  like_score: number | null;
+  like_reason: string;
   company_blurb: string;
   category: Category;       // primary leaf (back-compat)
   categories: string[];    // all assigned leaf ids
@@ -111,8 +113,26 @@ export async function getProfile(db: D1Database): Promise<string> {
   return text;
 }
 
+// Optional desirability preferences (meta key `preferences`, synced like the
+// profile): free text describing company tiers, product/industry interests, and
+// role-type preferences. Drives like_score; matching works fine without it.
+let prefsCache: { text: string; at: number } | null = null;
+
+export async function getPreferences(db: D1Database): Promise<string> {
+  if (prefsCache && Date.now() - prefsCache.at < PROFILE_TTL_MS) {
+    return prefsCache.text;
+  }
+  const row = await db
+    .prepare("SELECT value FROM meta WHERE key = 'preferences'")
+    .first<{ value: string }>();
+  const text = row?.value ?? "";
+  if (text) prefsCache = { text, at: Date.now() }; // never cache "no prefs yet"
+  return text;
+}
+
 export function clearProfileCache(): void {
   profileCache = null;
+  prefsCache = null;
 }
 
 // Split into a static SYSTEM prefix (profile + rubric — identical across every
@@ -127,15 +147,24 @@ full profile (master resume + their portfolio assistant's knowledge base):
 {PROFILE}
 </candidate_profile>
 
+The candidate may also have stated desirability PREFERENCES (company tier, product/industry
+interests, role-type preferences). They drive like_score ONLY, never match_score:
+
+<candidate_preferences>
+{PREFERENCES}
+</candidate_preferences>
+
 For EACH job the user sends, return:
-- "match_score": 0-100 — how strong a fit THIS candidate is. Be discerning, but remember these
+- "match_score": 0-100 — PURE skills-and-experience fit between this candidate and THIS
+  posting. Company prestige, brand, and how "desirable" the company is are NOT part of this
+  number (they are scored separately in like_score). Be discerning, but remember these
   are INTERNSHIP / new-grad roles: the bar to be a genuinely strong applicant is lower than for
   a senior hire, so DON'T be stingy at the top when the candidate truly fits their lane. Scores
   triage into three tiers by how squarely the role sits in the candidate's actual LANE (their
   specialties, per their real projects, certs, and skills above):
   · 85-100 = TOP APPLICANT — squarely in-lane; the role's core work matches a majority of their
     real projects/certs/skills, at the right level. A genuine in-lane role with real overlap
-    EARNS 85-92; reserve 93+ for a tailor-made fit at a strong brand.
+    EARNS 85-92; reserve 93+ for a tailor-made fit.
   · 70-84 = RECOMMENDED — adjacent, kinda in their lane; a related domain, or an infra/platform/
     backend role where their specialty is an EXPLICIT part of the mission. A solid intern fit.
   · 50-69 = TAKE A LOOK — generic overlap (shared tools/cloud/languages) with no real in-lane
@@ -165,6 +194,16 @@ For EACH job the user sends, return:
   intern/new-grad total pay for this kind of role at this company. (10 = top-of-market like
   quant/HFT or elite AI; 7-8 = strong big-tech pay; 5-6 = solid median; ≤4 = below-market or
   unknown-low.) Use your knowledge of the company + role; 5 if genuinely unknown.
+- "like_score": 0-100 — how much THIS CANDIDATE would WANT this job, fully separate from
+  fit. Score it from the candidate's stated preferences above (company tier ~40%,
+  product/industry type ~40%, role type ~20%). Calibration: 90+ = drop-everything dream
+  (loved tier AND product area AND role type). 80-89 = strongly wanted. 70-79 = solidly
+  wanted. 55-69 = acceptable fallback. <55 = a shrug. Do not grade-inflate small unknown
+  companies. If NO preferences are provided above, score 60 (neutral) for every job.
+  Location, term, clearance: NO effect on like_score (handled elsewhere).
+- "like_reason": ≤ 22 words, second person, concrete — WHY they'd want it or not, naming the
+  company-tier/product/role-type drivers. If no preferences are provided, use
+  "no preferences set — neutral".
 - "company_blurb": ≤ 40 words — what the company actually does, and what this role's team
   likely works on ("Palantir builds data-integration platforms for defense/intel; FDSE
   interns ship customer-facing pipelines and apps on Foundry/Gotham.").
@@ -176,7 +215,7 @@ For EACH job the user sends, return:
 
 Return ONLY a JSON array, one object per job, same order as sent:
 [{{"i": 0, "match_score": 88, "match_reason": "...", "skills": ["..."], "pay": 7,
-  "company_blurb": "...", "categories": ["iam_iga"]}}]
+  "like_score": 74, "like_reason": "...", "company_blurb": "...", "categories": ["iam_iga"]}}]
 No markdown, no explanation.`;
 
 // A compact leaf reference for the prompt: "leaf_id — Top > Mid > Leaf label".
@@ -195,9 +234,10 @@ function catGuide(): string {
 
 /** The cached system prefix (profile + rubric) — shared by the sync and batch
  *  paths so the scoring logic never drifts between them. */
-export function buildMatchSystem(profile: string): string {
+export function buildMatchSystem(profile: string, preferences = ""): string {
   return SYSTEM_PROMPT
     .replace("{PROFILE}", profile.slice(0, 40000))
+    .replace("{PREFERENCES}", preferences.slice(0, 8000) || "(none provided — score like_score 60 neutral)")
     .replace("{CAT_GUIDE}", catGuide());
 }
 
@@ -229,6 +269,11 @@ export function normalizeMatchItem(item: Record<string, unknown>, job: MatchInpu
     // `pay` (1-10 comp tier) is stored in the legacy `likeability` column.
     likeability: Number.isFinite(Number(item.pay ?? item.likeability))
       ? Math.min(10, Math.max(1, Number(item.pay ?? item.likeability))) : null,
+    // Desirability (0-100) — fully separate from fit; driven by the optional
+    // `preferences` meta key (neutral 60 when unset).
+    like_score: Number.isFinite(Number(item.like_score))
+      ? Math.min(100, Math.max(0, Math.round(Number(item.like_score)))) : null,
+    like_reason: String(item.like_reason ?? "").slice(0, 260),
     company_blurb: String(item.company_blurb ?? "").slice(0, 400),
     ...(() => {
       const cats = normalizeCategories(item.categories ?? item.category);
@@ -253,7 +298,8 @@ export async function matchJobs(
   if (!profile || !jobs.length) return [];
   const client = new Anthropic({ apiKey, defaultHeaders: EXTENDED_CACHE_HEADER });
   const out: MatchResult[] = [];
-  const system = buildMatchSystem(profile); // stable across batches → cache prefix
+  const preferences = db ? await getPreferences(db) : "";
+  const system = buildMatchSystem(profile, preferences); // stable across batches → cache prefix
 
   for (let start = 0; start < jobs.length; start += BATCH) {
     const batch = jobs.slice(start, start + BATCH);
@@ -281,14 +327,15 @@ export async function applyMatches(db: D1Database, results: MatchResult[]): Prom
   if (!results.length) return;
   const stmt = db.prepare(
     `UPDATE jobs SET match_score = ?, match_reason = ?, skills = ?, category = ?,
-     categories = ?, cat_path = ?, likeability = ?, company_blurb = ?, updated_at = ? WHERE id = ?`
+     categories = ?, cat_path = ?, likeability = ?, like_score = ?, like_reason = ?,
+     company_blurb = ?, updated_at = ? WHERE id = ?`
   );
   const ts = new Date().toISOString();
   await db.batch(
     results.map((r) =>
       stmt.bind(r.match_score, r.match_reason, JSON.stringify(r.skills), r.category,
                 JSON.stringify(r.categories), catPath(r.categories),
-                r.likeability, r.company_blurb, ts, r.id)
+                r.likeability, r.like_score, r.like_reason, r.company_blurb, ts, r.id)
     )
   );
 }

@@ -544,6 +544,45 @@
   .artrow .ev { color: var(--dim); font-size: 11px; }
   .artrow a.out { font-size: 12px; }
   .artrow a.out.danger { color: var(--red); }
+  .dropzone { flex: 1; min-width: 160px; border: 1.5px dashed var(--stroke); border-radius: 9px;
+    padding: 12px 14px; font-size: 12.5px; color: var(--muted); text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s; }
+  .dropzone:hover, .dropzone:focus-visible { border-color: var(--accent); color: var(--text); outline: none; }
+  .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+  .dropzone.busy { opacity: .6; pointer-events: none; }
+  #vBody iframe.pdfview { width: 100%; height: min(80vh, 1000px); border: none; border-radius: 8px; background: #fff; }
+  /* Raw DOCX view — real document pages rendered by docx-preview, fit-to-width via fitDocx() */
+  .docxraw { max-height: min(80vh, 1000px); overflow-y: auto; overflow-x: hidden; border-radius: 8px; background: #525659; }
+  .docxraw .docx-wrapper { background: #525659; padding: 14px 0; margin: 0 auto; display: flex; flex-direction: column; align-items: center; }
+  /* Markdown view (uploaded .md briefings, generated docs) — a clean reading page */
+  .mdview { background: var(--surface); color: var(--ink); border: 1px solid var(--hairline); border-radius: 10px;
+    padding: 26px 30px; max-height: min(78vh, 1000px); overflow-y: auto; line-height: 1.62; font-size: 14.5px; }
+  .mdview > :first-child { margin-top: 0; }
+  .mdview h2 { font-size: 21px; margin: 26px 0 8px; letter-spacing: -.01em; }
+  .mdview h3 { font-size: 16.5px; margin: 22px 0 6px; color: var(--title-c, var(--ink)); }
+  .mdview h4 { font-size: 13px; margin: 18px 0 4px; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); }
+  .mdview p { margin: 9px 0; }
+  .mdview ul { margin: 8px 0; padding-left: 22px; }
+  .mdview li { margin: 4px 0; }
+  .mdview a { color: var(--accent, #2e7df6); }
+  .mdview code { font: 12.5px var(--mono, ui-monospace,Menlo,monospace); background: var(--codebg, rgba(127,127,127,.14)); padding: 1px 5px; border-radius: 4px; }
+  .mdview pre.cb { background: var(--codebg, rgba(127,127,127,.12)); border: 1px solid var(--hairline); border-radius: 8px;
+    padding: 12px 14px; overflow-x: auto; margin: 12px 0; }
+  .mdview pre.cb code { background: none; padding: 0; font-size: 12.5px; white-space: pre; }
+  .mdview blockquote { margin: 12px 0; padding: 6px 14px; border-left: 3px solid var(--accent, #2e7df6);
+    color: var(--dim); background: rgba(127,127,127,.06); border-radius: 0 6px 6px 0; }
+  .mdview hr { border: none; border-top: 1px solid var(--hairline); margin: 20px 0; }
+  /* Structured DOCX view — renders like the page: white sheet, real bold/sizes/rules */
+  .docxdoc { background: #fff; color: #111; border-radius: 8px; padding: 34px 44px; font-family: Cambria, Georgia, serif; font-size: 10.5pt; line-height: 1.35; max-height: min(72vh, 900px); overflow: auto; }
+  .docxdoc .p { margin: 0 0 2px; min-height: 1em; white-space: pre-wrap; }
+  .docxdoc .p.tabbed { display: flex; justify-content: space-between; gap: 14px; white-space: pre-wrap; }
+  .docxdoc .p.tabbed > span:last-child { text-align: right; flex-shrink: 0; }
+  .docxdoc .p.rule { border-bottom: 1px solid #888; padding-bottom: 2px; margin-bottom: 6px; }
+  .docxdoc .p.center { text-align: center; justify-content: center; }
+  .docxdoc .p.right { text-align: right; }
+  .docxdoc .p.bullet { padding-left: 18px; text-indent: -11px; }
+  .docxdoc table { border-collapse: collapse; margin: 6px 0; width: 100%; }
+  .docxdoc td { border: 1px solid #bbb; padding: 2px 8px; vertical-align: top; }
   .evl { display: flex; gap: 10px; font-size: 12.5px; padding: 4px 0; color: #c4cad6; }
   .evl .ts { color: var(--dim); white-space: nowrap; }
   .evl .type { font-weight: 600; }
@@ -743,7 +782,10 @@
     <option value="0">Outside watchlist</option>
   </select>
   <select id="sortSel">
-          <option value="rank">Sort: Match rank</option>
+          <option value="rank">Sort: Match + pay</option>
+          <option value="match">Sort: Match</option>
+          <option value="like">Sort: Like</option>
+          <option value="pay">Sort: Pay</option>
           <option value="fresh">Sort: Freshest</option>
           <option value="updated">Sort: Updated</option>
           <option value="created">Sort: Added</option>
@@ -767,7 +809,7 @@
             <tr>
               <th class="selcol"><input type="checkbox" id="selAll" title="Select all on this page"></th>
               <th>Company</th><th>Title</th><th class="hide-sm">Category</th>
-              <th>AI match</th><th class="hide-sm">Pay</th><th class="hide-sm">Term</th>
+              <th>AI match</th><th class="hide-sm">Like</th><th class="hide-sm">Pay</th><th class="hide-sm">Term</th>
               <th class="hide-sm"></th><th>Phase</th>
               <th class="hide-sm">Updated</th><th></th>
             </tr>
@@ -799,7 +841,7 @@
     <button id="dEdit"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16z"/></svg>Edit</button>
     <button id="dRematch"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14-4M4 5v3h3M4 13a8 8 0 0 0 14 4M20 19v-3h-3"/></svg>Re-match</button>
     <div class="spacer"></div>
-    <button id="dSaveNotes">Save notes</button>
+    <span id="dNotesStatus" class="hint"></span>
   </div>
 </dialog>
 
@@ -1016,7 +1058,7 @@ function icon(name, cls) {
 function dot(color) { return `<span class="sdot" style="background:${color}"></span>`; }
 const REMATCH_LABEL = icon('refresh') + 'Re-match';
 const skelRows = (n = 6) => Array.from({ length: n }, () =>
-  '<tr><td colspan="11" style="border:none;padding:6px 2px"><div class="skel skel-row"></div></td></tr>').join("");
+  '<tr><td colspan="12" style="border:none;padding:6px 2px"><div class="skel skel-row"></div></td></tr>').join("");
 const skelCards = (n = 6) =>
   '<div class="kpis">' + Array.from({ length: 5 }, () => '<div class="skel" style="height:82px"></div>').join("") + '</div>' +
   '<div class="grid">' + Array.from({ length: n }, () => '<div class="skel skel-card"></div>').join("") + '</div>';
@@ -1044,21 +1086,34 @@ function rel(ts) {
 
 function md(src) {
   const lines = esc(src || "").split("\n");
-  let out = "", inList = false;
-  for (let ln of lines) {
-    ln = ln.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-           .replace(/\*([^*]+)\*/g, "<i>$1</i>")
-           .replace(/`([^`]+)`/g, "<code>$1</code>")
-           .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-    const h = ln.match(/^#{1,6}\s+(.*)/);
+  let out = "", inList = false, inCode = false;
+  const inline = (s) => s
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, "$1<i>$2</i>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  for (const raw of lines) {
+    if (/^\s*```/.test(raw)) {
+      if (inCode) { out += "</code></pre>"; inCode = false; }
+      else { if (inList) { out += "</ul>"; inList = false; } out += "<pre class='cb'><code>"; inCode = true; }
+      continue;
+    }
+    if (inCode) { out += raw + "\n"; continue; }
+    const ln = inline(raw);
+    const h = ln.match(/^(#{1,6})\s+(.*)/);
     const li = ln.match(/^\s*[-•*]\s+(.*)/);
-    if (li) { if (!inList) { out += "<ul>"; inList = true; } out += "<li>" + li[1] + "</li>"; continue; }
+    const oli = ln.match(/^\s*\d+[.)]\s+(.*)/);
+    const hr = /^\s*([-*_])\1{2,}\s*$/.test(raw);
+    const bq = ln.match(/^\s*&gt;\s?(.*)/);
+    if (li || oli) { if (!inList) { out += "<ul>"; inList = true; } out += "<li>" + (li ? li[1] : oli[1]) + "</li>"; continue; }
     if (inList) { out += "</ul>"; inList = false; }
-    if (h) out += "<h4>" + h[1] + "</h4>";
-    else if (ln.trim() === "") out += "<div class='sp'></div>";
-    else out += "<p>" + ln + "</p>";
+    if (hr) { out += "<hr>"; continue; }
+    if (bq) { out += "<blockquote>" + bq[1] + "</blockquote>"; continue; }
+    if (h) { const lvl = Math.min(h[1].length + 1, 4); out += `<h${lvl}>${h[2]}</h${lvl}>`; }
+    else if (ln.trim() !== "") out += "<p>" + ln + "</p>";
   }
   if (inList) out += "</ul>";
+  if (inCode) out += "</code></pre>";
   return out;
 }
 
@@ -1201,7 +1256,7 @@ function matchHtml(j) {
   if (j.match_score != null) {
     return `<span class="match ${matchClass(j.match_score)}" title="AI match — ${esc(j.match_reason)}">${j.match_score}<small>/100</small></span>`;
   }
-  if (j.ai_score != null) return `<span class="match m-lo" title="Pre-score — ${esc(j.ai_reason)}">${j.ai_score}<small>/100</small></span>`;
+  if (j.ai_score != null) return `<span class="match ${matchClass(j.ai_score)}" title="Pre-score — ${esc(j.ai_reason)}">${j.ai_score}<small>/100</small></span>`;
   return `<span class="loc">—</span>`;
 }
 
@@ -1329,6 +1384,7 @@ function renderRows() {
       </td>
       <td class="hide-sm">${catPills(j, 1)}</td>
       <td>${matchHtml(j)}</td>
+      <td class="hide-sm">${j.like_score != null ? `<span class="match ${matchClass(j.like_score)}" title="Likeability — ${esc(j.like_reason || "how much you'd want this job")}">${j.like_score}<small>/100</small></span>` : '<span class="loc">—</span>'}</td>
       <td class="hide-sm">${j.likeability != null ? `<span class="paycell" title="Estimated pay — comp tier for this role (1–10)">${j.likeability}</span>` : '<span class="loc">—</span>'}</td>
       <td class="hide-sm date">${j.term ? esc(j.term) : "Unknown"}</td>
       <td class="hide-sm">${starHtml(j)}</td>
@@ -2125,7 +2181,8 @@ async function openDetail(id) {
         ${PHASES.map(p => `<option value="${p}" ${p===job.phase?"selected":""}>${PHASE_LABEL[p]}</option>`).join("")}
       </select>
     </div>
-    ${job.match_reason ? `<div class="matchbox">${icon('target')} <b>Why this matches you:</b> ${esc(job.match_reason)}</div>` : ""}
+    ${job.match_reason ? `<div class="matchbox">${icon('target')} <b>Why this matches you${job.match_score != null ? ` (${job.match_score}/100)` : ""}:</b> ${esc(job.match_reason)}</div>` : ""}
+    ${job.like_score != null ? `<div class="matchbox" style="border-color:rgba(224,169,74,.35);background:rgba(224,169,74,.07)">${icon('star')} <b>How much you'd want it (${job.like_score}/100):</b> ${esc(job.like_reason || "")}</div>` : ""}
     ${job.company_blurb ? `<div class="matchbox" style="border-color:rgba(96,165,250,.3);background:rgba(96,165,250,.06)">${icon('building')} <b>About ${esc(job.company)}${job.likeability != null ? ` (pay ${job.likeability}/10)` : ""}:</b> ${esc(job.company_blurb)}</div>` : ""}
     ${skills.length ? `<div class="chips">${skills.map(s => `<span class="chip">${esc(s)}</span>`).join("")}</div>` : ""}
     <div class="hint" style="margin-bottom:10px">
@@ -2139,7 +2196,7 @@ async function openDetail(id) {
     <details><summary>Requirements</summary>
       <div class="body">${job.requirements ? md(job.requirements) : "—"}</div></details>
     <div class="field"><label>Notes</label>
-      <textarea id="dNotes" rows="3">${esc(job.notes)}</textarea></div>
+      <textarea id="dNotes" rows="3" style="overflow-y:auto; resize:vertical">${esc(job.notes)}</textarea></div>
     <div class="docs">
       <h3>Documents <span class="sub">generate tailored docs (Opus) or upload the PDF you actually submitted</span></h3>
       <div class="row2" style="flex-wrap:wrap; gap:6px">
@@ -2149,13 +2206,8 @@ async function openDetail(id) {
         <button data-gen="app_answers">${icon('list')}App answers</button>
       </div>
       <div class="row2" style="flex-wrap:wrap; gap:6px; margin-top:8px">
-        <select id="upKind">
-          <option value="upload_resume">Resume</option>
-          <option value="upload_cover_letter">Cover letter</option>
-          <option value="upload_other">Other</option>
-        </select>
-        <input type="file" id="upFile" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="flex:1; min-width:140px">
-        <button id="upBtn">Upload PDF / DOCX</button>
+        <div id="upDrop" class="dropzone" tabindex="0">Drop PDF / DOCX / MD files here (or click) — auto-sorted by filename, saved instantly</div>
+        <input type="file" id="upFile" multiple accept=".pdf,.docx,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown" hidden>
       </div>
       <div id="artList" class="hint" style="margin-top:8px">Loading saved documents…</div>
     </div>
@@ -2167,7 +2219,8 @@ async function openDetail(id) {
         : '<div class="hint">No events yet.</div>'}
     </div>`;
   $("dBody").querySelectorAll("[data-gen]").forEach(b => b.onclick = () => openDoc(b.dataset.gen));
-  $("upBtn").onclick = uploadPdf;
+  wireDropzone();
+  wireNotesAutosave(id);
   loadArtifacts(id);
   $("dPhase").onchange = async (e) => {
     await apiCall("/jobs/" + id, { method:"PATCH", body: JSON.stringify({ phase: e.target.value }) });
@@ -2177,11 +2230,36 @@ async function openDetail(id) {
   detailDlg.showModal();
 }
 
-$("dSaveNotes").onclick = async () => {
-  if (!detailId) return;
-  await apiCall("/jobs/" + detailId, { method:"PATCH", body: JSON.stringify({ notes: $("dNotes").value }) });
-  toast("Notes saved");
-};
+/* Notes autosave: debounce while typing, flush on close — no save button. */
+let notesTimer = null, notesDirty = false;
+function wireNotesAutosave(id) {
+  const ta = $("dNotes"), st = $("dNotesStatus");
+  if (!ta) return;
+  // auto-grow with content (long notes were unreadable in a fixed 3-row box);
+  // caps at 40% of the viewport, then scrolls inside the box
+  const autosize = () => {
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight + 2, window.innerHeight * 0.4) + "px";
+  };
+  autosize();
+  const flush = async () => {
+    if (!notesDirty) return;
+    notesDirty = false;
+    st.textContent = "Saving…";
+    try {
+      await apiCall("/jobs/" + id, { method: "PATCH", body: JSON.stringify({ notes: ta.value }) });
+      st.textContent = "Saved ✓";
+      setTimeout(() => { if (st.textContent === "Saved ✓") st.textContent = ""; }, 2500);
+    } catch { st.textContent = "Save failed — still typing? it will retry"; notesDirty = true; }
+  };
+  ta.oninput = () => {
+    autosize();
+    notesDirty = true; st.textContent = "…";
+    clearTimeout(notesTimer); notesTimer = setTimeout(flush, 900);
+  };
+  detailDlg.addEventListener("close", () => { clearTimeout(notesTimer); flush(); }, { once: true });
+}
+
 $("dEdit").onclick = () => {
   if (!detailJob) return;
   detailDlg.close();
@@ -2217,6 +2295,7 @@ const DOC_META = {
 const UPLOAD_META = {
   upload_resume:       { icon: "file", label: "Resume" },
   upload_cover_letter: { icon: "mail", label: "Cover letter" },
+  upload_briefing:     { icon: "list", label: "Briefing / notes" },
   upload_other:        { icon: "file", label: "Other" },
 };
 const docLabel = (k) => (DOC_META[k] || UPLOAD_META[k] || { icon: "file", label: k });
@@ -2378,8 +2457,8 @@ async function loadArtifacts(id) {
     const when = (a.created_at || "").slice(0, 10);
     const isFile = a.format === "pdf" || a.format === "docx";
     const open = isFile
-      ? `<a class="out" href="/api/artifacts/${a.id}/file${a.format === "docx" ? "" : ""}" target="_blank" rel="noopener">${a.format === "docx" ? "download" : "view ↗"}</a>`
-        + (a.format === "pdf" ? `<a class="out" href="/api/artifacts/${a.id}/file?dl=1">download</a>` : "")
+      ? `<a class="out" data-viewfile="${a.id}">view</a>`
+        + `<a class="out" href="/api/artifacts/${a.id}/file?dl=1">download</a>`
       : `<a class="out" data-view="${a.id}">view</a>`;
     const size = isFile && a.size ? ` · ${(a.size/1024).toFixed(0)} KB` : "";
     return `<div class="artrow">
@@ -2391,6 +2470,10 @@ async function loadArtifacts(id) {
       <a class="out danger" data-del="${a.id}">×</a>
     </div>`;
   }).join("");
+  el.querySelectorAll("[data-viewfile]").forEach(a => {
+    const art = arts.find(x => x.id === a.dataset.viewfile);
+    a.onclick = () => viewFile(a.dataset.viewfile, (art && art.title) || "Document", art && art.format);
+  });
   el.querySelectorAll("[data-view]").forEach(a => a.onclick = () => viewDoc(a.dataset.view));
   el.querySelectorAll("[data-del]").forEach(a => a.onclick = async () => {
     if (!confirm("Delete this saved document?")) return;
@@ -2404,25 +2487,291 @@ async function viewDoc(aid) {
     const { artifact } = await apiCall("/artifacts/" + aid);
     const m = docLabel(artifact.kind);
     $("vTitle").textContent = `${m.icon} ${artifact.title || m.label}`;
-    $("vBody").innerHTML = md(artifact.content || "");
-    $("vCopy").onclick = () => { navigator.clipboard.writeText(artifact.content || ""); toast("Copied"); };
+    const content = artifact.content || "";
+    if (content.startsWith(DOCX_HTML_MARK)) {
+      // structured docx view — HTML generated by docxToHtml (all text escaped at build time)
+      $("vBody").innerHTML = `<div class="docxdoc">${content.slice(DOCX_HTML_MARK.length)}</div>`;
+      $("vCopy").textContent = "⧉ Copy";
+      $("vCopy").onclick = () => {
+        navigator.clipboard.writeText($("vBody").querySelector(".docxdoc").innerText); toast("Copied");
+      };
+    } else {
+      $("vBody").innerHTML = `<div class="mdview">${md(content)}</div>`;
+      $("vCopy").textContent = "⧉ Copy";
+      $("vCopy").onclick = () => { navigator.clipboard.writeText(content); toast("Copied"); };
+    }
     viewDlg.showModal();
   } catch (e) { toast(e.message); }
 }
 
-async function uploadPdf() {
-  const f = $("upFile").files[0];
-  if (!f) { toast("Choose a PDF first"); return; }
-  const kind = $("upKind").value;
-  const fd = new FormData(); fd.append("file", f);
-  $("upBtn").disabled = true; $("upBtn").textContent = "Uploading…";
+/* Minimal DOCX extraction in the browser (no libraries): a .docx is a ZIP;
+   find word/document.xml in the central directory, inflate it with the native
+   DecompressionStream. docxToHtml keeps STRUCTURE (bold, font sizes, rule
+   lines, alignment, tab stops, bullets, tables) as escaped HTML we generate
+   ourselves; docxToText is the plain fallback. Fail-soft — extraction failure
+   never blocks the upload, it just means no inline preview. */
+async function docxDocumentXml(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const dv = new DataView(buf.buffer);
+  let eocd = -1; // End Of Central Directory signature, scanned from the tail
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65558); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("not a zip");
+  const count = dv.getUint16(eocd + 10, true);
+  let off = dv.getUint32(eocd + 16, true);
+  let entry = null;
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    const method = dv.getUint16(off + 10, true);
+    const csize = dv.getUint32(off + 20, true);
+    const nameLen = dv.getUint16(off + 28, true);
+    const extraLen = dv.getUint16(off + 30, true);
+    const cmtLen = dv.getUint16(off + 32, true);
+    const lho = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(buf.subarray(off + 46, off + 46 + nameLen));
+    if (name === "word/document.xml") { entry = { method, csize, lho }; break; }
+    off += 46 + nameLen + extraLen + cmtLen;
+  }
+  if (!entry) throw new Error("no document.xml");
+  const lNameLen = dv.getUint16(entry.lho + 26, true);
+  const lExtraLen = dv.getUint16(entry.lho + 28, true);
+  const start = entry.lho + 30 + lNameLen + lExtraLen;
+  const comp = buf.subarray(start, start + entry.csize);
+  let xmlBytes;
+  if (entry.method === 0) xmlBytes = comp;
+  else {
+    const ds = new DecompressionStream("deflate-raw");
+    xmlBytes = new Uint8Array(await new Response(new Blob([comp]).stream().pipeThrough(ds)).arrayBuffer());
+  }
+  return new TextDecoder().decode(xmlBytes);
+}
+
+async function docxToText(file) {
+  return (await docxDocumentXml(file))
+    .replace(/<w:tab[^>]*\/>/g, "\t")
+    .replace(/<\/w:p>/g, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#?\w+;/g, " ")
+    .replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/* Structured DOCX → constrained HTML. Every piece of document text goes
+   through escDx() before it touches markup, so a crafted docx can't inject
+   HTML — the only tags in the output are ones this function writes. */
+const DOCX_HTML_MARK = "<!--docx-html-->";
+const DOCX_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+function escDx(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+async function docxToHtml(file) {
+  const doc = new DOMParser().parseFromString(await docxDocumentXml(file), "text/xml");
+  if (doc.querySelector("parsererror")) throw new Error("bad xml");
+  const body = doc.getElementsByTagNameNS(DOCX_NS, "body")[0];
+  if (!body) throw new Error("no body");
+  const kid = (el, name) => { // first direct child with this localName
+    for (const c of el.children) if (c.localName === name) return c;
+    return null;
+  };
+  const val = (el) => el && (el.getAttributeNS(DOCX_NS, "val") ?? el.getAttribute("w:val"));
+  const flagOn = (el) => { const v = val(el); return !!el && v !== "false" && v !== "0" && v !== "none"; };
+
+  const runOpenClose = (rPr) => { // one styled <span> per run
+    let style = "";
+    if (rPr) {
+      if (flagOn(kid(rPr, "b"))) style += "font-weight:bold;";
+      if (flagOn(kid(rPr, "i"))) style += "font-style:italic;";
+      if (flagOn(kid(rPr, "u"))) style += "text-decoration:underline;";
+      if (flagOn(kid(rPr, "strike"))) style += "text-decoration:line-through;";
+      const sz = val(kid(rPr, "sz"));
+      if (sz && +sz > 0) style += `font-size:${+sz / 2}pt;`;
+      const color = val(kid(rPr, "color"));
+      if (color && color !== "auto" && /^[0-9a-fA-F]{6}$/.test(color)) style += `color:#${color};`;
+    }
+    return style ? [`<span style="${style}">`, "</span>"] : ["", ""];
+  };
+
+  const paraHtml = (p) => {
+    const pPr = kid(p, "pPr");
+    const cls = ["p"];
+    const jc = pPr && val(kid(pPr, "jc"));
+    if (jc === "center") cls.push("center");
+    else if (jc === "right" || jc === "end") cls.push("right");
+    const pBdr = pPr && kid(pPr, "pBdr");
+    if (pBdr && (kid(pBdr, "bottom") || kid(pBdr, "between"))) cls.push("rule"); // the ── hairline under headings
+    if (pPr && kid(pPr, "numPr")) cls.push("bullet");
+    // Indentation (hanging indent = how literal "• " bullets keep wrapped lines aligned)
+    let pstyle = "";
+    const ind = pPr && kid(pPr, "ind");
+    if (ind) {
+      const tw = (n) => +(ind.getAttributeNS(DOCX_NS, n) ?? ind.getAttribute("w:" + n) ?? 0);
+      const left = tw("left"), hang = tw("hanging"), fl = tw("firstLine");
+      if (left > 0) pstyle += `padding-left:${(left / 20).toFixed(1)}pt;`;
+      if (hang > 0) pstyle += `text-indent:-${(hang / 20).toFixed(1)}pt;`;
+      else if (fl > 0) pstyle += `text-indent:${(fl / 20).toFixed(1)}pt;`;
+    }
+    // Collect run text as segments split on tab stops (resumes right-tab their dates)
+    const segs = [""];
+    for (const r of p.getElementsByTagNameNS(DOCX_NS, "r")) {
+      // only runs belonging to THIS paragraph (skip any inside a nested paragraph)
+      let anc = r.parentElement, mine = false;
+      while (anc) { if (anc === p) { mine = true; break; } if (anc.localName === "p") break; anc = anc.parentElement; }
+      if (!mine) continue;
+      const [open, close] = runOpenClose(kid(r, "rPr"));
+      for (const c of r.children) {
+        if (c.localName === "t") {
+          // literal tab characters inside the text count as tab stops too
+          c.textContent.split("\t").forEach((piece, i) => {
+            if (i) segs.push("");
+            const t = escDx(piece);
+            if (t) segs[segs.length - 1] += open + t + close;
+          });
+        }
+        else if (c.localName === "tab") segs.push("");
+        else if (c.localName === "br" || c.localName === "cr") segs[segs.length - 1] += "<br>";
+      }
+    }
+    const parts = segs.filter((s, i) => s !== "" || i === 0);
+    const bullet = cls.includes("bullet") ? "• " : "";
+    const st = pstyle ? ` style="${pstyle}"` : "";
+    if (parts.length > 1 && !cls.includes("center"))
+      return `<div class="${cls.join(" ")} tabbed"${st}>` + parts.map(s => `<span>${s}</span>`).join("") + "</div>";
+    const inner = bullet + (parts.join(" ") || "&nbsp;");
+    return `<div class="${cls.join(" ")}"${st}>${inner}</div>`;
+  };
+
+  const out = [];
+  for (const node of body.children) {
+    if (node.localName === "p") out.push(paraHtml(node));
+    else if (node.localName === "tbl") {
+      const rows = [];
+      for (const tr of node.getElementsByTagNameNS(DOCX_NS, "tr")) {
+        const cells = [];
+        for (const tc of tr.children) {
+          if (tc.localName !== "tc") continue;
+          const ps = [];
+          for (const cp of tc.children) if (cp.localName === "p") ps.push(paraHtml(cp));
+          cells.push(`<td>${ps.join("")}</td>`);
+        }
+        rows.push(`<tr>${cells.join("")}</tr>`);
+      }
+      out.push(`<table>${rows.join("")}</table>`);
+    }
+  }
+  const html = out.join("");
+  if (!html.replace(/<[^>]+>|&nbsp;/g, "").trim()) throw new Error("empty");
+  return DOCX_HTML_MARK + html;
+}
+
+function inferUploadKind(name) {
+  const n = name.toLowerCase();
+  if (n.endsWith(".md") || n.endsWith(".markdown")) return "upload_briefing";
+  if (/cover|cvr|letter/.test(n)) return "upload_cover_letter";
+  if (/resume|cv\b|cv[._-]/.test(n)) return "upload_resume";
+  return "upload_other"; // nothing in the name says what it is — just a file
+}
+
+async function autoUpload(files) {
+  const list = Array.from(files || []).filter(Boolean);
+  if (!list.length) return;
+  const dz = $("upDrop"), orig = dz.textContent;
+  dz.classList.add("busy");
+  let ok = 0;
   try {
-    const res = await fetch(`/api/jobs/${detailId}/upload?kind=${kind}`, { method: "POST", body: fd });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || res.statusText);
-    toast("Uploaded to R2"); $("upFile").value = ""; loadArtifacts(detailId);
-  } catch (e) { toast(e.message); }
-  finally { $("upBtn").disabled = false; $("upBtn").textContent = "Upload PDF / DOCX"; }
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      dz.textContent = list.length > 1 ? `Uploading ${i + 1}/${list.length} — ${f.name}…` : `Uploading ${f.name}…`;
+      try {
+        const kind = inferUploadKind(f.name);
+        const fd = new FormData(); fd.append("file", f);
+        if (f.name.toLowerCase().endsWith(".docx")) {
+          // structured (formatted) preview first; plain text fallback; both best-effort
+          try { fd.append("text", (await docxToHtml(f)).slice(0, 200000)); }
+          catch { try { fd.append("text", (await docxToText(f)).slice(0, 100000)); } catch {} }
+        }
+        const res = await fetch(`/api/jobs/${detailId}/upload?kind=${kind}`, { method: "POST", body: fd });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || res.statusText);
+        ok++;
+      } catch (e) { toast(`${f.name}: ${e.message}`); }
+    }
+    if (ok) toast(ok === 1 ? `Saved ${list[0].name}` : `Saved ${ok} of ${list.length} files`);
+    loadArtifacts(detailId);
+  } finally { dz.classList.remove("busy"); dz.textContent = orig; $("upFile").value = ""; }
+}
+
+function wireDropzone() {
+  const dz = $("upDrop"), fi = $("upFile");
+  if (!dz) return;
+  dz.onclick = () => fi.click();
+  dz.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fi.click(); } };
+  fi.onchange = () => autoUpload(fi.files);
+  ["dragenter", "dragover"].forEach(ev => dz.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.add("drag");
+  }));
+  ["dragleave", "drop"].forEach(ev => dz.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.remove("drag");
+  }));
+  dz.addEventListener("drop", (e) => autoUpload(e.dataTransfer.files));
+}
+
+/* Raw document viewing: PDFs render natively in a same-origin iframe; DOCX is
+   rendered as the actual document (pages, fonts, layout) by the self-hosted
+   docx-preview library, loaded on first use. */
+let docxLibsPromise = null;
+function ensureDocxLibs() {
+  if (window.docx && window.docx.renderAsync) return Promise.resolve();
+  if (!docxLibsPromise) {
+    docxLibsPromise = ["/vendor/jszip.js", "/vendor/docx-preview.js"].reduce(
+      (p, src) => p.then(() => new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = src; s.onload = res;
+        s.onerror = () => { docxLibsPromise = null; rej(new Error("couldn't load " + src)); };
+        document.head.appendChild(s);
+      })),
+      Promise.resolve());
+  }
+  return docxLibsPromise;
+}
+
+async function viewFile(aid, title, fmt) {
+  $("vTitle").textContent = title;
+  $("vCopy").textContent = "⬇ Download";
+  $("vCopy").onclick = () => { window.open(`/api/artifacts/${aid}/file?dl=1`); };
+  if (fmt === "docx") {
+    $("vBody").innerHTML = '<div class="hint">Loading document…</div>';
+    viewDlg.showModal();
+    try {
+      await ensureDocxLibs();
+      const res = await fetch(`/api/artifacts/${aid}/file`);
+      if (!res.ok) throw new Error("fetch failed (" + res.status + ")");
+      const buf = await res.arrayBuffer();
+      const host = document.createElement("div");
+      host.className = "docxraw";
+      await window.docx.renderAsync(buf, host);
+      $("vBody").innerHTML = "";
+      $("vBody").appendChild(host);
+      fitDocx(host);           // scale the fixed-width page down to fit — no side-scroll
+    } catch (e) {
+      $("vBody").innerHTML = `<div class="hint">Couldn't render this document in the browser (${esc(e.message)}). Use Download instead.</div>`;
+    }
+    return;
+  }
+  // #view=FitH = fit page WIDTH (readable + scroll down), not the shrunk whole-page/print look.
+  $("vBody").innerHTML = `<iframe class="pdfview" src="/api/artifacts/${aid}/file#view=FitH&toolbar=1" title="${esc(title)}"></iframe>`;
+  viewDlg.showModal();
+}
+
+// Fit a docx-preview page to the modal width via CSS zoom (Chrome) so the whole
+// page is visible without horizontal scrolling.
+function fitDocx(host) {
+  requestAnimationFrame(() => {
+    const page = host.querySelector(".docx-wrapper > section") || host.querySelector(".docx");
+    const wrap = host.querySelector(".docx-wrapper");
+    if (!page || !wrap) return;
+    const avail = host.clientWidth - 24, pw = page.offsetWidth;
+    if (pw > avail) wrap.style.zoom = (avail / pw).toFixed(3);
+  });
 }
 
 /* ── add flow ───────────────────────────────────────────────────────────── */

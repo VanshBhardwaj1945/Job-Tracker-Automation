@@ -10,6 +10,7 @@ on:
   #   - cron: "0 14 * * 1"    # Monday 14:00 UTC — weekly health report
   #   - cron: "23 */2 * * *"  # every 2h — gmail watcher (tracker email events)
   #   - cron: "0 22 * * 0"    # Sunday 22:00 UTC — weekly digest + tracker housekeeping
+  #   - cron: "0 13 * * *"    # daily — YC startup internships sweep (YC_DAILY, ~60 page fetches)
   workflow_dispatch:
     inputs:
       mode:
@@ -27,6 +28,7 @@ on:
           - digest
           - sync-tracker
           - rematch
+          - yc
 
 concurrency:
   group: job-monitor
@@ -112,10 +114,28 @@ jobs:
       - name: Re-match all unscored tracker jobs
         if: ${{ github.event.inputs.mode == 'rematch' }}
         env:
+          REMATCH_ALL:           "1"   # manual dispatch = full re-score (rubric changes)
           TRACKER_URL:           ${{ secrets.TRACKER_URL }}
           TRACKER_CLIENT_ID:     ${{ secrets.TRACKER_CLIENT_ID }}
           TRACKER_CLIENT_SECRET: ${{ secrets.TRACKER_CLIENT_SECRET }}
         run: python scripts/rematch.py
+
+      # Same pipeline as the hourly monitor, plus the YC startup internships
+      # feed (YC_DAILY=1 is the gate — sources.py skips it without the env, so
+      # the hourly cron never pays the ~60 extra page fetches). $0 to run.
+      - name: YC startup sweep (daily)
+        if: ${{ github.event.inputs.mode == 'yc' || github.event.schedule == '0 13 * * *' }}
+        env:
+          YC_DAILY:              "1"
+          EMAIL_SENDER:          ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:        ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:              ${{ secrets.EMAIL_TO }}
+          DISCORD_WEBHOOK_URL:   ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+          TRACKER_URL:           ${{ secrets.TRACKER_URL }}
+          TRACKER_CLIENT_ID:     ${{ secrets.TRACKER_CLIENT_ID }}
+          TRACKER_CLIENT_SECRET: ${{ secrets.TRACKER_CLIENT_SECRET }}
+        run: python monitor/scraper.py
 
       - name: Weekly digest + tracker housekeeping
         if: ${{ github.event.inputs.mode == 'digest' || github.event.schedule == '0 22 * * 0' }}

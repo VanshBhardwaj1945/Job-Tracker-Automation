@@ -4,6 +4,8 @@ import { ensureSchema } from "./db";
 import { verifyAccessJwt } from "./auth";
 import { api } from "./api";
 import ui from "./ui.html";
+import JSZIP_SRC from "./vendor/jszip.min.txt";
+import DOCX_PREVIEW_SRC from "./vendor/docx-preview.min.txt";
 import { ICON_SVG_ROUND, ICON_SVG_FULL, APPLE_180, MANIFEST, pngResponse } from "./icons";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -44,15 +46,31 @@ app.use("*", async (c, next) => {
 
 app.use("*", async (c, next) => {
   await next();
+  // The artifact file stream must be frameable by our own UI (the in-app PDF
+  // viewer is a same-origin <iframe>); everything else stays unframeable.
+  const frameable = /^\/api\/artifacts\/[^/]+\/file$/.test(c.req.path);
   c.res.headers.set("X-Content-Type-Options", "nosniff");
-  c.res.headers.set("X-Frame-Options", "DENY");
+  c.res.headers.set("X-Frame-Options", frameable ? "SAMEORIGIN" : "DENY");
   c.res.headers.set("Referrer-Policy", "no-referrer");
   c.res.headers.set(
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    "img-src 'self' data: blob:; connect-src 'self'; " +
+    `frame-ancestors ${frameable ? "'self'" : "'none'"}; base-uri 'none'; form-action 'self'`
   );
 });
+
+// Vendored client libs (self-hosted — CSP allows same-origin scripts only).
+// jszip + docx-preview power the raw in-app DOCX rendering in the view modal.
+const vendorJs = (src: string) =>
+  new Response(src, {
+    headers: {
+      "Content-Type": "application/javascript; charset=utf-8",
+      "Cache-Control": "public, max-age=86400",
+    },
+  });
+app.get("/vendor/jszip.js", () => vendorJs(JSZIP_SRC));
+app.get("/vendor/docx-preview.js", () => vendorJs(DOCX_PREVIEW_SRC));
 
 app.route("/api", api);
 

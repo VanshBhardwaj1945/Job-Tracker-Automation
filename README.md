@@ -40,7 +40,7 @@ A production-shaped, serverless, AI-driven system — not a tutorial. Every piec
 - **Zero-trust auth**: Cloudflare Access in front of the app; the Worker independently verifies the signed **JWT** (audience + issuer + RS256 signature) and enforces the owner identity as defense-in-depth.
 - **Infrastructure as Code**: the entire cloud footprint (Worker, D1, R2, DNS, Access policies, service tokens) is defined in **Terraform** — reproducible, reviewable, one `apply`.
 - **Event-driven automation**: scheduled **GitHub Actions** workflows scrape job boards, watch email over IMAP, and sync data through the API with least-privilege **service tokens**.
-- **Applied LLM engineering**: profile-aware **0–100 job matching** (with a harsh, lane-calibrated rubric), structured extraction, and per-job document generation using Claude — with **prompt caching** that keeps a mid-tier model (Sonnet) close to entry-tier cost, a **daily spend guardrail**, and the **Message Batches API**.
+- **Applied LLM engineering**: profile-aware **0–100 job matching** (with a harsh, lane-calibrated rubric) plus a **separate desirability axis** scored from your stated preferences, structured extraction, and per-job document generation using Claude — with **prompt caching** that keeps a mid-tier model (Sonnet) close to entry-tier cost, a **daily spend guardrail**, and the **Message Batches API**.
 - **Behaviour-driven analytics**: the dashboard mines your own application history (fit quality, focus, conversion, momentum, follow-ups) — turning a tracker into a feedback loop, not just a list.
 - **Hierarchical data modeling**: a parent→mid→leaf **category taxonomy** where the AI tags the deepest leaves and everything **rolls up** — one SQL-`LIKE` ancestor-closure column powers tree filters and analytics at any level, so a job in *SRE* also counts under *Infra/Platform* and *SWE*.
 
@@ -73,7 +73,12 @@ A production-shaped, serverless, AI-driven system — not a tutorial. Every piec
                                                    └─► generate resume / cover letter /
                                                        interview prep / answers (Opus)
   Gmail (IMAP) ──► Gmail watcher ──► classifies application emails ──► timeline + auto phase flip
+                              └────► extracts Handshake job-alert listings ──► new tracker rows
 ```
+
+Optional extra feeds: **YC startup internships** (public pages, `YC_DAILY=1`, $0) and
+**Handshake job-alert emails** (enable them in Handshake's notification settings — the
+gmail watcher does the rest). See [`docs/SETUP.md`](docs/SETUP.md).
 
 ## How it targets what you want
 
@@ -86,9 +91,11 @@ keywords that describe your field, and a short summary of your background. From 
 - **It also casts a much wider net** — a crowd-sourced feed plus ATS discovery surface *extra*
   roles from companies you never listed, so you don't miss something good just because it wasn't on
   your radar.
-- **Then it weighs everything against you** — every posting is scored 0–10 against your profile and
-  ranked, so the best-fit roles float to the top and the noise sinks. Your weighted preferences
-  anchor the scoring; the AI does the judgment on each individual posting.
+- **Then it weighs everything against you — on three axes.** Every posting gets a 0–100
+  **match** score (pure skills fit against your profile), a 0–100 **like** score (how much
+  *you'd* want it, from an optional preferences note — company tiers, product areas, role
+  types), and a **pay** tier. The apply-now tabs gate on both match *and* like, so "qualified
+  but don't want it" and "dream company, decent fit" land where they should.
 
 The result: you tell it your targets once, and it keeps finding both those *and* the ones you'd
 have wished you'd seen — already sorted by how well they fit you.
