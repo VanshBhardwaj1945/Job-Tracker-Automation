@@ -85,6 +85,8 @@ def norm_key(company, title):
     t = re.sub(r"\b(summer|fall|spring|winter)\b", "", t)
     t = re.sub(r"\b20\d\d\b", "", t)
     t = re.sub(r"\binternships?\b", "intern", t)
+    t = re.sub(r"\bengineer(ing|s)?\b", "engineer", t)
+    t = re.sub(r"\bdevelopers\b", "developer", t)
     t = re.sub(r"\bco ?op\b", "", t)
     tokens = sorted(set(t.split()))
     return co + "|" + " ".join(tokens)
@@ -346,6 +348,13 @@ def run(dry_run=False):
     all_found = [j for j in all_found if not is_pure_soc_grc(j.get("title", ""))]
     if before_lane - len(all_found):
         log.info(f"lane gate: dropped {before_lane - len(all_found)} pure SOC/GRC/compliance posting(s)")
+
+    # Junk-company gate: pandas NaN etc. leaking through feeds as a string
+    before_junk = len(all_found)
+    all_found = [j for j in all_found
+                 if str(j.get("company", "")).strip().lower() not in ("", "nan", "none", "null")]
+    if before_junk - len(all_found):
+        log.info(f"junk-company gate: dropped {before_junk - len(all_found)} posting(s) with no real company")
 
     # ── Dedupe ────────────────────────────────────────────────────────────────
     # Two layers: exact id (company|title|url hash) AND norm_key (URL-independent),

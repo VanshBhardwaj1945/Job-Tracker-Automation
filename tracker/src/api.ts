@@ -40,6 +40,8 @@ function normKey(company: string, title: string): string {
     .replace(/\b(summer|fall|spring|winter)\b/g, "")
     .replace(/\b20\d\d\b/g, "")
     .replace(/\binternships?\b/g, "intern")
+    .replace(/\bengineer(ing|s)?\b/g, "engineer")
+    .replace(/\bdevelopers\b/g, "developer")
     .replace(/\bco ?op\b/g, "")
     .replace(/\s+/g, " ").trim();
   const tokens = Array.from(new Set(t.split(" ").filter(Boolean))).sort();
