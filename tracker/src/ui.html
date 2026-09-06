@@ -634,69 +634,132 @@
     .hide-sm { display: none; }
   }
 
-  /* ── phone: native-app look — bottom tab bar, floating job cards, sheets ── */
+  /* slide-out drawer + filter toggle exist only on phone */
+  #drawer, #drawerBack, .menubtn, .filterbtn { display: none; }
+  /* ── phone: native-app look — slide-out drawer, job cards, sheets (redesigned 2026-09-06) ── */
   @media (max-width: 740px) {
     html, body { overflow-x: hidden; }
     .shell { flex-direction: column; }
-    /* sidebar → fixed iOS-style bottom tab bar (theme-aware: --bbar) */
-    aside {
-      position: fixed; bottom: 0; left: 0; right: 0; top: auto; z-index: 20;
-      width: 100%; height: auto; flex-direction: row; align-items: center; gap: 2px;
-      padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-      border-right: none; border-top: 1px solid var(--stroke);
-      background: var(--bbar);
-      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    }
-    .logo, aside .foot { display: none; }
-    .nav { flex: 1; flex-direction: column; gap: 3px; padding: 7px 4px;
-           font-size: 10.5px; text-align: center; border-radius: 12px; }
-    .nav .ic { width: auto; font-size: 19px; }
-    /* theme toggle → compact icon-only square in the tab bar */
-    .themebtn { margin: 0; width: 42px; height: 42px; flex: 0 0 42px; padding: 0;
-                justify-content: center; border-radius: 12px; }
-    .themebtn .tt-label { display: none; }
+    aside { display: none; }                 /* nav lives in the slide-out drawer */
 
-    .content { padding: 12px 12px calc(96px + env(safe-area-inset-bottom)); }
-    .topbar { gap: 8px; margin-bottom: 12px; }
-    .topbar h1 { font-size: 17px; }
+    /* ── slide-out drawer ── */
+    .menubtn { display: flex; align-items: center; justify-content: center;
+               width: 42px; height: 42px; padding: 0; border-radius: 12px; flex: 0 0 42px; }
+    .menubtn .i { width: 22px; height: 22px; }
+    #drawerBack { display: block; position: fixed; inset: 0; z-index: 55;
+                  background: rgba(0,0,0,.45); opacity: 0; pointer-events: none;
+                  transition: opacity .22s var(--ease); }
+    #drawerBack.show { opacity: 1; pointer-events: auto; }
+    #drawer { display: flex; flex-direction: column; position: fixed; z-index: 60;
+              top: 0; bottom: 0; left: 0; width: min(80vw, 320px);
+              padding: 18px 14px calc(16px + env(safe-area-inset-bottom));
+              background: var(--surface); border-right: 1px solid var(--stroke);
+              box-shadow: var(--shadow-sm); overflow-y: auto;
+              transform: translateX(-105%); transition: transform .24s var(--ease); }
+    #drawer.open { transform: none; }
+    .drawer-top { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+    .drawer-logo { display: flex; align-items: center; gap: 10px; }
+    .drawer-logo .mark { width: 34px; height: 34px; }
+    .drawer-logo b { font-size: 15px; }
+    .drawer-logo small { display: block; color: var(--muted); font-size: 11px; }
+    #drawerAdd { justify-content: center; padding: 11px 12px; font-size: 14.5px; }
+    /* the moved .tabs strip becomes a vertical menu */
+    #drawerTabs .tabs { flex-direction: column; flex-wrap: nowrap; overflow: visible;
+                        background: none; border: none; box-shadow: none; padding: 0; gap: 3px; }
+    #drawerTabs .tab { width: 100%; padding: 9px 12px; font-size: 14px;
+                       border-radius: 10px; white-space: nowrap; }
+    /* Analytics / Activity + theme toggle pinned to the drawer bottom
+       (the Tracker button is redundant on phone — the tier tabs ARE the tracker) */
+    #drawerTabs { margin-bottom: 26px; }
+    .drawer-nav { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--stroke);
+                  display: flex; flex-direction: column; gap: 3px; }
+    .drawer-nav .nav[data-page="tracker"] { display: none; }
+    .drawer-nav .nav { flex-direction: row; gap: 10px; padding: 11px 12px;
+                       font-size: 14px; text-align: left; border-radius: 10px; }
+    .drawer-nav .nav .ic { font-size: 17px; }
+    .drawer-nav .nav.active::before { display: none; }
+    .drawer-nav .themebtn { margin-top: 8px; width: 100%; justify-content: flex-start; }
+
+    .content { padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); }
+    .topbar { gap: 10px; margin-bottom: 10px; align-items: center; }
+    .topbar h1 { font-size: 20px; }
     .topbar .sub { display: none; }
-    button { padding: 8px 12px; }
+    #exportBtn { display: none; }            /* CSV is a desktop tool */
+    .topbar #addBtn { display: none; }       /* Add job lives in the drawer */
+    button { padding: 9px 13px; }
 
     /* iOS zooms any focused input under 16px — keep controls at 16px */
     input, select, textarea { font-size: 16px; }
-    .filters { gap: 6px; margin: 10px 0; }
-    .filters > input, .filters > select { flex: 1 1 130px; width: auto; min-width: 0; }
-    #search { flex: 1 1 100%; }
+    /* filters: search on its own row, then a tidy 2-per-row grid of selects */
+    .filters { gap: 8px; margin: 10px 0; }
+    #search { flex: 1 1 auto; height: 44px; }
+    .filterbtn { display: flex; align-items: center; justify-content: center;
+                 width: 44px; height: 44px; flex: 0 0 44px; padding: 0; border-radius: 12px; }
+    .filterbtn .i { width: 20px; height: 20px; }
+    .filters.open .filterbtn { border-color: var(--accent); color: var(--accent2); }
+    /* filters collapsed by default — the funnel button reveals them */
+    .filters > select, .filters > .msel, .filters .bucketbtn { display: none; }
+    .filters.open > select { display: block; flex: 1 1 calc(50% - 8px); width: auto; min-width: 0; }
+    .filters.open > .msel { display: block; flex: 1 1 calc(50% - 8px); width: auto; min-width: 0; }
+    .filters.open .bucketbtn { display: flex; }
+    .filters > select, .msel-btn { height: 42px; font-size: 14px; }
+    .msel-btn { width: 100%; max-width: none; padding: 6px 12px; }
+    .bucketbtn { height: 42px; }
     .msel-panel { position: fixed; left: 12px; right: 12px; top: auto; min-width: 0;
-                  max-width: none; }
-    .tabs { padding: 4px; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
-    .tabs::-webkit-scrollbar { display: none; }
-    .tab { padding: 6px 10px; font-size: 12.5px; }
+                  max-width: none; max-height: 55dvh; overflow-y: auto; }
 
-    /* table → floating cards (native list feel) */
-    .tablecard { padding: 0; overflow-x: hidden; background: none; border: none;
+    /* ── table → cards. Column map (12 tds):
+       1 checkbox · 2 company · 3 title(+loc+reason) · 4 category · 5 match ·
+       6 like · 7 pay · 8 term · 9 star · 10 phase · 11 updated · 12 actions ── */
+    .tablecard { padding: 0; overflow: visible; background: none; border: none;
                  box-shadow: none; }
     table, tbody { display: block; width: 100%; }
     thead { display: none; }
     tr.row {
-      display: grid; grid-template-columns: 1fr auto auto;
-      grid-template-areas: "co co match" "title title title" "term term term"
-                           "phase star link";
-      gap: 4px 10px; padding: 13px 14px; margin: 0 0 10px;
+      display: grid;
+      grid-template-columns: auto auto auto 1fr;
+      grid-template-areas:
+        "co     co     co    match"
+        "title  title  title title"
+        "cat    like   pay   term"
+        "phase  phase  star  act";
+      gap: 7px 10px; padding: 14px 15px 12px; margin: 0 0 12px;
       background: var(--surface); border: 1px solid var(--stroke);
-      border-radius: 14px; box-shadow: var(--shadow-sm);
+      border-radius: 16px; box-shadow: var(--shadow-sm);
     }
-    td { display: block; border: none; padding: 0; }
-    td:nth-child(1) { grid-area: co; font-size: 15px; }
-    td:nth-child(2) { grid-area: title; }
-    /* term + bucket star are useful on phone — undo .hide-sm for them */
-    td:nth-child(6) { display: block; grid-area: term; font-size: 11.5px; color: var(--muted); }
-    td:nth-child(7) { display: block; grid-area: star; justify-self: end; align-self: center; }
-    td:nth-child(4) { grid-area: match; justify-self: end; align-self: start; }
-    td:nth-child(8) { grid-area: phase; justify-self: start; margin-top: 6px; }
-    td:nth-child(10) { grid-area: link; justify-self: end; align-self: center; }
-    a.out { font-size: 19px; padding: 4px; }
-    .reason { max-width: none; }
+    td { display: block; border: none; padding: 0; min-width: 0; }
+    td.selcol { display: none; }                       /* bulk-select is a desktop tool */
+    td:nth-child(2)  { grid-area: co; font-size: 15.5px; font-weight: 650; }
+    td:nth-child(3)  { grid-area: title; font-size: 14px; line-height: 1.35; }
+    .row .loc { font-size: 12px; margin-top: 2px; }
+    .row .reason { max-width: none; font-size: 12px; line-height: 1.4; margin-top: 4px;
+                   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                   overflow: hidden; }
+    td:nth-child(5)  { grid-area: match; justify-self: end; align-self: start;
+                       display: flex; align-items: center; gap: 5px; }
+    td:nth-child(5)::before, td:nth-child(6)::before, td:nth-child(7)::before {
+      font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    td:nth-child(5)::before { content: "match"; }
+    td:nth-child(6)::before { content: "like"; margin-right: 5px; }
+    td:nth-child(7)::before { content: "pay"; margin-right: 5px; }
+    /* no score yet → hide the whole labeled chip, not just the dash */
+    td:nth-child(6):not(:has(.match))::before, td:nth-child(7):not(:has(.paycell))::before { content: none; }
+    /* category · like · pay · term share one tidy chip row */
+    td:nth-child(4) { grid-area: cat; display: flex; align-items: center; }
+    td:nth-child(6) { grid-area: like; display: flex; align-items: center; }
+    td:nth-child(7) { grid-area: pay; display: flex; align-items: center; }
+    td:nth-child(8) { grid-area: term; display: block; justify-self: end; align-self: center;
+                      max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+                      white-space: nowrap; font-size: 11.5px; color: var(--muted); }
+    /* a bare em-dash placeholder is noise on a card — hide empty like/pay chips */
+    td:nth-child(6) > .loc, td:nth-child(7) > .loc { display: none; }
+    td:nth-child(9)  { grid-area: star; display: block; justify-self: end; align-self: center; }
+    td:nth-child(10) { grid-area: phase; justify-self: start; }
+    .row select.phase { padding: 7px 10px; border-radius: 10px; font-size: 14px; }
+    td:nth-child(11) { display: none; }                /* updated date = noise on phone */
+    td:nth-child(12) { grid-area: act; justify-self: end; align-self: center; }
+    tr.row a.out { font-size: 20px; padding: 6px; }
+    tr.row .out.nope { font-size: 18px; padding: 6px; }
     #empty { padding: 28px 10px; }
 
     /* analytics / activity */
@@ -709,25 +772,58 @@
     .runrow .ev { display: none; }
     .hb { padding: 12px 13px; }
 
-    /* dialogs → full-width bottom sheets */
+    /* dialogs → full-width bottom sheets with a grab handle */
     dialog {
       width: 100vw; max-width: 100vw; margin: auto 0 0;
       border-left: none; border-right: none; border-bottom: none;
-      border-radius: 16px 16px 0 0;
-      max-height: 94dvh;
+      border-radius: 18px 18px 0 0;
+      max-height: 86dvh;
     }
-    .dlg-body { max-height: calc(94dvh - 122px); }
+    dialog::before { content: ""; display: block; width: 36px; height: 4px;
+                     border-radius: 2px; background: var(--stroke); margin: 8px auto 0; }
+    .dlg-head { position: relative; padding: 12px 56px 12px 16px; flex-wrap: wrap; gap: 8px; }
+    .dlg-head h2 { font-size: 17px; line-height: 1.3; flex: 1 1 100%; }
+    .dlg-head .spacer { display: none; }
+    .dlg-head > button { font-size: 12.5px; padding: 8px 10px; }
+    .dlg-head > button:last-child {           /* pin the close button top-right */
+      position: absolute; top: 10px; right: 12px; width: 36px; height: 36px;
+      padding: 0; display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; }
+    .dlg-body { max-height: calc(86dvh - 132px); padding-left: 16px; padding-right: 16px;
+                font-size: 14.5px; line-height: 1.55; }
+    .matchbox { font-size: 13.5px; line-height: 1.5; padding: 12px 13px; border-radius: 12px; }
     .grid2 { grid-template-columns: 1fr; }
-    .dlg-head, .dlg-body, .dlg-foot { padding-left: 14px; padding-right: 14px; }
-    .dlg-foot { flex-wrap: wrap; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+    .dlg-foot { flex-wrap: wrap; gap: 8px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+    .dlg-foot button { min-height: 42px; flex: 1 1 auto; }
     .modes { flex-wrap: wrap; }
 
     /* toast sits above the tab bar, not under it */
-    #toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+    #toast { bottom: calc(92px + env(safe-area-inset-bottom)); }
   }
 </style>
 </head>
 <body>
+<div id="drawerBack"></div>
+<nav id="drawer" aria-label="Menu">
+  <div class="drawer-top">
+    <div class="logo drawer-logo">
+      <div class="mark">
+        <svg viewBox="0 0 512 512" fill="none"><defs><linearGradient id="jgm2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4da3ff"/><stop offset="1" stop-color="#1f6ae0"/></linearGradient></defs>
+<g fill="none" stroke="url(#jgm2)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+<path d="M 225.6 105.0 Q 262.0 84.0 298.4 105.0 L 357.3 139.0 Q 393.6 160.0 393.6 202.0 L 393.6 270.0 Q 393.6 312.0 357.3 333.0 L 298.4 367.0 Q 262.0 388.0 220.0 388.0 L 88.0 388.0"/><path d="M 130.4 248.0 L 130.4 202.0 Q 130.4 160.0 166.7 139.0 L 225.6 105.0"/>
+<line x1="122" y1="322" x2="188" y2="322" stroke-width="30"/>
+<line x1="94" y1="370" x2="150" y2="370" stroke-width="30"/>
+<line x1="300.1" y1="214.0" x2="359.0" y2="180.0" stroke-width="24"/>
+</g>
+<circle cx="262" cy="236" r="27" fill="none" stroke="url(#jgm2)" stroke-width="22"/></svg>
+      </div>
+      <div><b>Job Tracker</b><small>example.com</small></div>
+    </div>
+    <button class="primary" id="drawerAdd"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Add job</button>
+  </div>
+  <div id="drawerTabs"></div>
+  <div class="drawer-nav" id="drawerNav"></div>
+</nav>
 <div class="shell">
   <aside>
     <div class="logo">
@@ -760,6 +856,7 @@
 
   <div class="content">
     <div class="topbar">
+      <button id="menuBtn" class="menubtn" aria-label="Open menu"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div>
         <h1 id="pageTitle">Tracker</h1>
         <div class="sub" id="pageSub">Recommended first — you apply the moment you see a fit.</div>
@@ -774,6 +871,7 @@
       <div class="tabs glass" id="tabs"></div>
       <div class="filters">
         <input id="search" type="search" placeholder="Search company / title…">
+        <button id="filterBtn" class="filterbtn" type="button" aria-label="Show filters"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>
         <div class="msel" id="catMsel"></div>
         <div class="msel" id="termMsel"></div>
   <select id="wlFilter">
@@ -1308,6 +1406,15 @@ async function load() {
   state.jobs = data.jobs; state.counts = data.counts; state.tiers = data.tiers || {};
   if (data.terms) state.terms_all = data.terms;
   state.selected.clear();            // selection is per-view; a fresh query resets it
+  // phone: on first open, land on the highest tier that actually has jobs
+  if (!state._tabAutopicked) {
+    state._tabAutopicked = true;
+    if (matchMedia("(max-width: 740px)").matches) {
+      const order = ["top", "rec", "foryou", "look", "found"];
+      const first = order.find(k => tabCount(TABS.find(t => t.key === k)) > 0);
+      if (first && first !== state.tab) { state.tab = first; return load(); }
+    }
+  }
   renderTabs(); renderRows();
 }
 
@@ -1360,7 +1467,10 @@ function renderTabs() {
     `<div class="tab ${t.key===state.tab?"active":""}" data-tab="${t.key}">${t.label}<span class="n">${tabCount(t)}</span></div>`
   ).join("");
   document.querySelectorAll("#tabs .tab").forEach(el =>
-    el.onclick = () => { state.tab = el.dataset.tab; load(); });
+    el.onclick = () => {
+      if (state.page !== "tracker") setPage("tracker");
+      state.tab = el.dataset.tab; load();
+    });
 }
 
 
@@ -3026,6 +3136,39 @@ $("sortSel").onchange = (e) => { state.sort = e.target.value; load(); };
   initBulkBar();
   await load();
 })().catch(e => { $("empty").hidden = false; $("empty").textContent = "Failed to load: " + e.message; });
+
+/* ── phone drawer: move tabs + nav + theme toggle into the slide-out menu ── */
+(() => {
+  const mq = matchMedia("(max-width: 740px)");
+  const drawer = document.getElementById("drawer"), back = document.getElementById("drawerBack");
+  const moved = [];               // {el, marker} so desktop layout restores exactly
+  const mark = (el) => { const m = document.createComment("home"); el.parentNode.insertBefore(m, el); return { el, marker: m }; };
+  const tabsEl = document.getElementById("tabs");
+  const navEls = [...document.querySelectorAll("aside .nav")];
+  const themeBtn = document.getElementById("themeToggle");
+  [tabsEl, ...navEls, themeBtn].forEach(el => moved.push(mark(el)));
+  function apply() {
+    if (mq.matches) {
+      document.getElementById("drawerTabs").appendChild(tabsEl);
+      const dn = document.getElementById("drawerNav");
+      navEls.forEach(n => dn.appendChild(n));
+      dn.appendChild(themeBtn);
+    } else {
+      closeDrawer();
+      moved.forEach(({ el, marker }) => marker.parentNode.insertBefore(el, marker.nextSibling));
+    }
+  }
+  function openDrawer() { drawer.classList.add("open"); back.classList.add("show"); }
+  function closeDrawer() { drawer.classList.remove("open"); back.classList.remove("show"); }
+  document.getElementById("menuBtn").onclick = openDrawer;
+  back.onclick = closeDrawer;
+  drawer.addEventListener("click", (e) => {
+    if (e.target.closest(".tab, .nav")) closeDrawer();
+  });
+  document.getElementById("drawerAdd").onclick = () => { closeDrawer(); document.getElementById("addBtn").click(); };
+  document.getElementById("filterBtn").onclick = () =>
+    document.querySelector(".filters").classList.toggle("open");
+  mq.addEventListener("change", apply);
+  apply();
+})();
 </script>
-</body>
-</html>
