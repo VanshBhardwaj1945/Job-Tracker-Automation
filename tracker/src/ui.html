@@ -652,7 +652,7 @@
     #drawerBack.show { opacity: 1; pointer-events: auto; }
     #drawer { display: flex; flex-direction: column; position: fixed; z-index: 60;
               top: 0; bottom: 0; left: 0; width: min(80vw, 320px);
-              padding: 18px 14px calc(16px + env(safe-area-inset-bottom));
+              padding: calc(18px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom));
               background: var(--surface); border-right: 1px solid var(--stroke);
               box-shadow: var(--shadow-sm); overflow-y: auto;
               transform: translateX(-105%); transition: transform .24s var(--ease); }
@@ -680,7 +680,8 @@
     .drawer-nav .nav.active::before { display: none; }
     .drawer-nav .themebtn { margin-top: 8px; width: 100%; justify-content: flex-start; }
 
-    .content { padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); }
+    /* iPhone status bar (time/battery): keep the header below the top safe area */
+    .content { padding: calc(14px + env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom)); }
     .topbar { gap: 10px; margin-bottom: 10px; align-items: center; }
     .topbar h1 { font-size: 20px; }
     .topbar .sub { display: none; }
@@ -796,6 +797,15 @@
     .dlg-foot { flex-wrap: wrap; gap: 8px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
     .dlg-foot button { min-height: 42px; flex: 1 1 auto; }
     .modes { flex-wrap: wrap; }
+
+    /* document viewers inside the sheet: give them the full width and sane heights */
+    #vBody iframe.pdfview { height: 68dvh; border-radius: 10px; }
+    .docxraw { max-height: 66dvh; overflow-x: auto; }
+    .docxraw .docx-wrapper { padding: 10px 0; }
+    .mdview { padding: 16px 14px; font-size: 14px; line-height: 1.55; }
+    .mdview h2 { font-size: 18px; margin: 20px 0 8px; }
+    .mdview h3 { font-size: 15px; margin: 16px 0 6px; }
+    #viewDlg .dlg-body { padding-left: 10px; padding-right: 10px; }
 
     /* toast sits above the tab bar, not under it */
     #toast { bottom: calc(92px + env(safe-area-inset-bottom)); }
@@ -2300,7 +2310,7 @@ async function openDetail(id) {
       ${job.applied_at ? " · applied " + job.applied_at.slice(0,10) : ""}
       ${safeUrl(job.url) ? ` · <a class="out" href="${esc(safeUrl(job.url))}" target="_blank" rel="noopener">open posting ↗</a>` : ""}
     </div>
-    <details open><summary>Job description</summary>
+    <details ${matchMedia("(max-width: 740px)").matches ? "" : "open"}><summary>Job description</summary>
       <div class="body">${job.description ? md(job.description)
         : '<span class="hint">Couldn\'t fetch this posting (likely a JS-rendered page). Hit Re-match to retry, or open the posting and paste it in via Edit.</span>'}</div></details>
     <details><summary>Requirements</summary>
@@ -2874,13 +2884,15 @@ async function viewFile(aid, title, fmt) {
 
 // Fit a docx-preview page to the modal width via CSS zoom (Chrome) so the whole
 // page is visible without horizontal scrolling.
-function fitDocx(host) {
+function fitDocx(host, retried) {
   requestAnimationFrame(() => {
     const page = host.querySelector(".docx-wrapper > section") || host.querySelector(".docx");
     const wrap = host.querySelector(".docx-wrapper");
     if (!page || !wrap) return;
     const avail = host.clientWidth - 24, pw = page.offsetWidth;
-    if (pw > avail) wrap.style.zoom = (avail / pw).toFixed(3);
+    // the phone bottom sheet animates open — measure again once layout settles
+    if (avail <= 0 && !retried) return setTimeout(() => fitDocx(host, true), 260);
+    if (pw > avail && avail > 0) wrap.style.zoom = (avail / pw).toFixed(3);
   });
 }
 
