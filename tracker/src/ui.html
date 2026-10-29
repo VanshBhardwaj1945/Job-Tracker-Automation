@@ -296,6 +296,13 @@
   .tab.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px rgba(46,125,246,.28); }
   .tab.active .n { opacity: .85; color: var(--accent2); }
   .tab .n { font-size: 10.5px; opacity: .6; margin-left: 5px; }
+  /* grouped tabs: group row on top, the open group's tabs under it (phone uses .tabmenu) */
+  .tabnav { animation: riseIn .5s var(--ease) both; }
+  .tabnav .tabs { animation: none; align-items: center; }
+  .tabsep { width: 1px; align-self: stretch; background: var(--stroke2); margin: 5px 6px; }
+  .tabsub { margin-top: 6px; padding: 0 3px; }
+  .tabsub .tab { font-size: 12px; padding: 5px 10px; }
+  .tabmenu, .phonehead { display: none; }
   /* z-index 45: the riseIn animation (fill:both) makes .filters and .tablecard
      sibling stacking contexts, so without this the msel dropdown paints UNDER
      the table (DOM order). Keep above the table, below dialogs/toast. */
@@ -663,11 +670,29 @@
     .drawer-logo b { font-size: 15px; }
     .drawer-logo small { display: block; color: var(--muted); font-size: 11px; }
     #drawerAdd { justify-content: center; padding: 11px 12px; font-size: 14.5px; }
-    /* the moved .tabs strip becomes a vertical menu */
-    #drawerTabs .tabs { flex-direction: column; flex-wrap: nowrap; overflow: visible;
-                        background: none; border: none; box-shadow: none; padding: 0; gap: 3px; }
-    #drawerTabs .tab { width: 100%; padding: 9px 12px; font-size: 14px;
-                       border-radius: 10px; white-space: nowrap; }
+    /* the moved tab nav becomes grouped, folding sections */
+    #drawerTabs .tabtop, #drawerTabs .tabsub { display: none; }
+    #drawerTabs .tabmenu { display: flex; flex-direction: column; gap: 2px; }
+    .dgroup { margin-bottom: 6px; }
+    .dghead { display: flex; align-items: center; padding: 8px 10px 5px; cursor: pointer; user-select: none;
+              font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+    .dghead .gn { margin-left: auto; margin-right: 8px; color: var(--muted); letter-spacing: 0; font-weight: 500; }
+    .dghead .chev { display: flex; transition: transform .15s var(--ease); }
+    .dghead .chev .i { width: 13px; height: 13px; }
+    .dgroup.folded .chev { transform: rotate(-90deg); }
+    .dgroup.folded .dtab { display: none; }
+    .dtab { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px 9px 20px;
+            border-radius: 10px; font-size: 14px; color: var(--muted); cursor: pointer; }
+    .dtab.single { padding-left: 12px; }
+    .dtab .n { font-size: 11.5px; opacity: .7; }
+    .dtab.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px rgba(46,125,246,.28); }
+    .dtab.active .n { color: var(--accent2); opacity: 1; }
+    .dsep { height: 1px; background: var(--stroke); margin: 6px 4px; }
+    /* header names the open tab on the tracker page */
+    body[data-page="tracker"] #pageTitle { display: none; }
+    body[data-page="tracker"] .phonehead { display: block; }
+    .phonehead b { display: block; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+    .phonehead small { color: var(--muted); font-size: 12.5px; }
     /* Analytics / Activity + theme toggle pinned to the drawer bottom
        (the Tracker button is redundant on phone — the tier tabs ARE the tracker) */
     #drawerTabs { margin-bottom: 26px; }
@@ -812,7 +837,7 @@
   }
 </style>
 </head>
-<body>
+<body data-page="tracker">
 <div id="drawerBack"></div>
 <nav id="drawer" aria-label="Menu">
   <div class="drawer-top">
@@ -870,6 +895,7 @@
       <div>
         <h1 id="pageTitle">Tracker</h1>
         <div class="sub" id="pageSub">Recommended first — you apply the moment you see a fit.</div>
+        <div class="phonehead"><b id="tabTitle"></b><small id="tabCrumb"></small></div>
       </div>
       <div class="spacer"></div>
       <button id="exportBtn" title="Download all jobs as CSV"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>CSV</button>
@@ -878,7 +904,7 @@
 
     <!-- ── TRACKER ─────────────────────────────────────────────────────── -->
     <main id="page-tracker">
-      <div class="tabs glass" id="tabs"></div>
+      <div class="tabnav" id="tabs"></div>
       <div class="filters">
         <input id="search" type="search" placeholder="Search company / title…">
         <button id="filterBtn" class="filterbtn" type="button" aria-label="Show filters"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>
@@ -1110,20 +1136,32 @@ async function loadTaxonomy() {
   CAT_ROOTS = nodes.filter(n => !n.parent).map(n => n.id);
   CAT_LEAVES = nodes.filter(n => !(CAT_KIDS[n.id] || []).length).map(n => n.id);
 }
-const TABS = [
-  { key:"top", label:"Top applicant", tier:"top" },
-  { key:"rec", label:"Recommended", tier:"rec" },
-  { key:"foryou", label:"For you", tier:"foryou" },
-  { key:"look", label:"Take a look", tier:"look" },
-  { key:"found", label:"Found", phases:"found" },
-  { key:"applied", label:"Applied", phases:"applied" },
-  { key:"oa", label:"OA", phases:"oa" },
-  { key:"interview", label:"Interview", phases:"interview" },
-  { key:"offer", label:"Offer", phases:"offer,accepted" },
-  { key:"rejected", label:"Rejected", phases:"rejected,withdrawn" },
-  { key:"nope", label:"Not applying", phases:"not_applying" },
-  { key:"all", label:"All", phases:"" },
+// Tabs come in groups (his 2026-10-29 layout): Not applied / In process / Past loops,
+// then single tabs. Desktop shows the groups as a top row with the open group's tabs
+// under it; the phone drawer lists each group as a folding section.
+const TAB_GROUPS = [
+  { key:"na", label:"Not applied", tabs:[
+    { key:"found", label:"Found", phases:"found" },
+    { key:"top", label:"Top applicant", tier:"top" },
+    { key:"rec", label:"Recommended", tier:"rec" },
+    { key:"foryou", label:"For you", tier:"foryou" },
+    { key:"look", label:"Take a look", tier:"look" } ] },
+  { key:"ip", label:"In process", tabs:[
+    { key:"applied", label:"Applied", phases:"applied" },
+    { key:"oa", label:"OA", phases:"oa" },
+    { key:"interview", label:"Interview", phases:"interview" } ] },
+  { key:"pl", label:"Past loops", tabs:[
+    { key:"loop_none", label:"No OA", loops:"none" },
+    { key:"loop_oa", label:"Stopped at OA", loops:"oa" },
+    { key:"loop_interview", label:"Stopped at interview", loops:"interview" } ] },
 ];
+const TAB_SINGLES = [
+  { key:"offer", label:"Offer", phases:"offer,accepted" },
+  { key:"all", label:"All", phases:"" },
+  { key:"nope", label:"Not applying", phases:"not_applying" },
+  { key:"archived", label:"Archive", phases:"archived" },
+];
+const TABS = [...TAB_GROUPS.flatMap(g => g.tabs.map(t => ({ ...t, group: g.key }))), ...TAB_SINGLES];
 const PAGE_META = {
   tracker:   ["Tracker", "Recommended first — you apply the moment you see a fit."],
   analytics: ["Analytics", "Your pipeline, your categories, and the tools worth building projects around."],
@@ -1133,6 +1171,7 @@ const PAGE_META = {
 /* ── Linear-style inline line icons (replace emojis) ─────────────────────── */
 const IC = {
   plus:'<path d="M12 5v14M5 12h14"/>',
+  chevron:'<path d="m6 9 6 6 6-6"/>',
   download:'<path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/>',
   upload:'<path d="M12 21V9m0 0 4 4m-4-4-4 4M5 3h14"/>',
   save:'<path d="M5 3h11l3 3v15H5zM8 3v6h7M8 21v-7h8v7"/>',
@@ -1176,7 +1215,9 @@ const state = { page:"tracker", tab:"top", q:"", sort:"rank", watchlist:"",
                 anScope:"all", // analytics scope: "all" | "applied" | node id
                 buckets:[], bucket:"", // user-defined favorite lists + active bucket filter
                 selected:new Set(), // ids ticked for a bulk status change
-                counts:{}, recommended:0, jobs:[] };
+                counts:{}, recommended:0, jobs:[],
+                loops:{}, lastInGroup:{ na:"found", ip:"applied", pl:"loop_none" }, // tab a group header reopens
+                foldedGroups:new Set((() => { try { return JSON.parse(localStorage.getItem("foldedGroups") || "[]"); } catch { return []; } })()) };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
   ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" })[c]);
@@ -1388,6 +1429,7 @@ function freshHtml(j) {
 /* ── navigation ─────────────────────────────────────────────────────────── */
 function setPage(p) {
   state.page = p;
+  document.body.dataset.page = p;
   document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.page === p));
   ["tracker","analytics","activity"].forEach(x => {
     $("page-" + x).style.display = x === p ? "" : "none";
@@ -1403,7 +1445,8 @@ document.querySelectorAll(".nav").forEach(n => n.onclick = () => setPage(n.datas
 async function load() {
   const tab = TABS.find(t => t.key === state.tab);
   const p = new URLSearchParams();
-  if (tab.tier) p.set("tier", tab.tier);
+  if (tab.loops) p.set("loops", tab.loops);
+  else if (tab.tier) p.set("tier", tab.tier);
   else if (tab.phases) p.set("phase", tab.phases);
   if (state.q) p.set("q", state.q);
   if (state.cats.length) { p.set("category", state.cats.join(",")); if (state.catEx) p.set("catmode", "exclude"); }
@@ -1414,6 +1457,7 @@ async function load() {
   if (!state.jobs.length) $("rows").innerHTML = skelRows();
   const data = await apiCall("/jobs?" + p);
   state.jobs = data.jobs; state.counts = data.counts; state.tiers = data.tiers || {};
+  state.loops = data.loop_split || {};
   if (data.terms) state.terms_all = data.terms;
   state.selected.clear();            // selection is per-view; a fresh query resets it
   // phone: on first open, land on the highest tier that actually has jobs
@@ -1467,20 +1511,54 @@ function initBulkBar() {
 }
 
 function tabCount(tab) {
+  if (tab.loops) return state.loops[tab.loops] || 0;
   if (tab.tier) return state.tiers[tab.tier] || 0;
   if (!tab.phases) return Object.values(state.counts).reduce((a,b) => a+b, 0);
   return tab.phases.split(",").reduce((a,p) => a + (state.counts[p] || 0), 0);
 }
+// Not applied counts Found only (the tiers are slices of Found); the others add up their tabs.
+const groupCount = g => g.key === "na" ? tabCount(g.tabs[0]) : g.tabs.reduce((a,t) => a + tabCount(t), 0);
+const tabHtml = (t, cls, attrs) =>
+  `<div class="${cls} ${t.key===state.tab?"active":""}" ${attrs}>${t.label}<span class="n">${t.count}</span></div>`;
 
 function renderTabs() {
-  $("tabs").innerHTML = TABS.map(t =>
-    `<div class="tab ${t.key===state.tab?"active":""}" data-tab="${t.key}">${t.label}<span class="n">${tabCount(t)}</span></div>`
-  ).join("");
-  document.querySelectorAll("#tabs .tab").forEach(el =>
-    el.onclick = () => {
-      if (state.page !== "tracker") setPage("tracker");
-      state.tab = el.dataset.tab; load();
-    });
+  const cur = TABS.find(t => t.key === state.tab);
+  if (cur?.group) state.lastInGroup[cur.group] = cur.key;
+  const open = TAB_GROUPS.find(g => g.key === cur?.group);
+  const top = TAB_GROUPS.map(g =>
+      `<div class="tab ${open===g?"active":""}" data-group="${g.key}">${g.label}<span class="n">${groupCount(g)}</span></div>`).join("")
+    + `<div class="tabsep"></div>`
+    + TAB_SINGLES.map(t => tabHtml({ ...t, count: tabCount(t) }, "tab", `data-tab="${t.key}"`)).join("");
+  const sub = open ? open.tabs.map(t => tabHtml({ ...t, count: tabCount(t) }, "tab", `data-tab="${t.key}"`)).join("") : "";
+  // phone drawer: each group is a folding section, then the single tabs
+  const menu = TAB_GROUPS.map(g => `
+      <div class="dgroup ${state.foldedGroups.has(g.key)?"folded":""}">
+        <div class="dghead" data-fold="${g.key}"><span>${g.label}</span><span class="gn">${groupCount(g)}</span><span class="chev">${icon('chevron')}</span></div>
+        ${g.tabs.map(t => tabHtml({ ...t, count: tabCount(t) }, "dtab", `data-tab="${t.key}"`)).join("")}
+      </div>`).join("")
+    + `<div class="dsep"></div>`
+    + TAB_SINGLES.map((t,i) => (i===1?`<div class="dsep"></div>`:"") + tabHtml({ ...t, count: tabCount(t) }, "dtab single", `data-tab="${t.key}"`)).join("");
+  $("tabs").innerHTML = `<div class="tabs glass tabtop">${top}</div>`
+    + (sub ? `<div class="tabs tabsub">${sub}</div>` : "")
+    + `<div class="tabmenu">${menu}</div>`;
+  const go = (key) => {
+    if (state.page !== "tracker") setPage("tracker");
+    state.tab = key; load();
+  };
+  $("tabs").querySelectorAll("[data-tab]").forEach(el => el.onclick = () => go(el.dataset.tab));
+  $("tabs").querySelectorAll("[data-group]").forEach(el => el.onclick = () => go(state.lastInGroup[el.dataset.group]));
+  $("tabs").querySelectorAll("[data-fold]").forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    const k = el.dataset.fold;
+    state.foldedGroups.has(k) ? state.foldedGroups.delete(k) : state.foldedGroups.add(k);
+    try { localStorage.setItem("foldedGroups", JSON.stringify([...state.foldedGroups])); } catch {}
+    el.parentNode.classList.toggle("folded");
+  });
+  // phone header names the open tab ("Stopped at OA" / "Past loops · 6 jobs")
+  if (state.page === "tracker" && cur) {
+    $("tabTitle").textContent = cur.label;
+    $("tabCrumb").textContent = (open ? open.label + " · " : "") + `${state.total ?? tabCount(cur)} jobs`;
+  }
 }
 
 
@@ -1493,11 +1571,14 @@ function renderRows() {
         rec:"Nothing in Recommended — check For you.",
         foryou:"Nothing in For you — check Take a look.",
         look:"Nothing here — the monitor keeps hunting hourly."})[t.tier]
+    : t?.loops ? ({none:"No rejections before an OA.",
+        oa:"No loops that stopped at the OA.",
+        interview:"No loops that reached an interview."})[t.loops]
     : "Nothing here yet.";
   tb.innerHTML = state.jobs.map(j => `
     <tr class="row" data-id="${j.id}">
       <td class="selcol"><input type="checkbox" class="rowsel" data-id="${j.id}" ${state.selected.has(j.id) ? "checked" : ""}></td>
-      <td class="co">${freshHtml(j)}${esc(j.company)}${j.watchlisted === 0 ? '<span class="pill newco">new co</span>' : ""}</td>
+      <td class="co">${freshHtml(j)}${esc(j.company)}${j.loop_stage ? `<span class="pill newco" title="Furthest stage reached">${({oa:"OA",interview:"Interview",offer:"Offer"})[j.loop_stage]}</span>` : ""}${j.watchlisted === 0 ? '<span class="pill newco">new co</span>' : ""}</td>
       <td class="title">${esc(j.title)}
         <div class="loc">${esc(j.location) || "—"}</div>
         ${j.match_reason ? `<div class="reason">↳ ${esc(j.match_reason)}</div>` : ""}
@@ -3175,7 +3256,7 @@ $("sortSel").onchange = (e) => { state.sort = e.target.value; load(); };
   document.getElementById("menuBtn").onclick = openDrawer;
   back.onclick = closeDrawer;
   drawer.addEventListener("click", (e) => {
-    if (e.target.closest(".tab, .nav")) closeDrawer();
+    if (e.target.closest(".dtab, .nav")) closeDrawer();
   });
   document.getElementById("drawerAdd").onclick = () => { closeDrawer(); document.getElementById("addBtn").click(); };
   document.getElementById("filterBtn").onclick = () =>

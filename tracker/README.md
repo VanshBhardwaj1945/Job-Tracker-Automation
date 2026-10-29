@@ -15,9 +15,12 @@ scripts/sync_profile.py ──► meta profile_resume + profile_extra ──► 
 
 ## Views (Aurora-glass sidebar UI)
 
-- **Tracker** — Recommended (found + match ≥ 7) · Found · Applied · OA · Interview ·
-  Offer · Rejected · All. Search, category filter, sort, star importance, inline phase
-  dropdowns, detail modal (markdown description/requirements, match reason, skills chips,
+- **Tracker** — tabs in groups: **Not applied** (Found, plus the Found tiers Top applicant ·
+  Recommended · For you · Take a look) · **In process** (Applied, OA, Interview) · **Past loops**
+  (No OA, Stopped at OA, Stopped at interview: every rejected/withdrawn job by where it stopped)
+  · then Offer, All, Not applying, Archive. Desktop shows the group row with the open group's
+  tabs under it; the phone menu lists each group as a folding section. Search, category
+  filter, sort, inline phase dropdowns, detail modal (markdown description/requirements, match reason, skills chips,
   notes, event timeline, edit-everything form, re-match). CSV export in the topbar.
 - **Analytics** — KPI row (interview rate, avg days-to-response), applications/week +
   per-month area charts, category donut, pipeline funnel, sources, top companies,
@@ -46,7 +49,7 @@ Profile Sync workflow on push) → matches refresh.
 
 | Route | What |
 |---|---|
-| `GET /api/jobs` | filters: `phase`, `recommended=1`, `category`, `q`, `min_score`, `sort` |
+| `GET /api/jobs` | filters: `phase`, `tier`, `recommended=1`, `loops` (`none` / `oa` / `interview` = where a rejected/withdrawn job stopped), `category`, `q`, `min_score`, `sort`; response carries `counts`, `tiers`, `loop_split` |
 | `POST /api/jobs` · `PATCH/DELETE /api/jobs/:id` | CRUD (phase changes log events) |
 | `POST /api/jobs/bulk` | monitor upsert (INSERT OR IGNORE, background match) |
 | `POST /api/import` | URL/text → extracted + matched draft |

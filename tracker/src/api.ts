@@ -187,13 +187,28 @@ const RECOMMENDED_WHERE = `phase = 'found' AND ((like_score IS NOT NULL AND ((ma
 // monochrome pills from this, so there's one source of truth (types.ts).
 api.get("/taxonomy", (c) => c.json({ nodes: TAXONOMY, labels: CATEGORY_LABELS }));
 
+// Past loops: every rejected/withdrawn row split by where it stopped, read from the
+// event log (phase changes + classified emails): never reached an OA, stopped at the OA,
+// or reached an interview (an offer that still ended counts as interview).
+const LOOP_STAGE = (stage: string) =>
+  `EXISTS (SELECT 1 FROM events e WHERE e.job_id = jobs.id AND (e.type = 'email_${stage}' OR (e.type = 'phase_change' AND e.detail LIKE '%→ ${stage}%')))`;
+const REACHED_INTERVIEW = `(${LOOP_STAGE("offer")} OR ${LOOP_STAGE("interview")})`;
+const LOOP_SPLIT: Record<string, string> = {
+  none: `phase IN ('rejected','withdrawn') AND NOT (${REACHED_INTERVIEW} OR ${LOOP_STAGE("oa")})`,
+  oa: `phase IN ('rejected','withdrawn') AND ${LOOP_STAGE("oa")} AND NOT ${REACHED_INTERVIEW}`,
+  interview: `phase IN ('rejected','withdrawn') AND ${REACHED_INTERVIEW}`,
+};
+const LOOP_STAGE_COL = `CASE WHEN ${LOOP_STAGE("offer")} THEN 'offer' WHEN ${LOOP_STAGE("interview")} THEN 'interview' WHEN ${LOOP_STAGE("oa")} THEN 'oa' END AS loop_stage`;
+
 // ── List / filter ────────────────────────────────────────────────────────────
 api.get("/jobs", async (c) => {
   const q = c.req.query();
   const where: string[] = [];
   const binds: unknown[] = [];
 
-  if (q.tier && TIER_WHERE[q.tier]) {
+  if (q.loops && LOOP_SPLIT[q.loops]) {
+    where.push(`(${LOOP_SPLIT[q.loops]})`);
+  } else if (q.tier && TIER_WHERE[q.tier]) {
     where.push(`(${TIER_WHERE[q.tier]})`);
   } else if (q.recommended === "1") {
     where.push(`(${RECOMMENDED_WHERE})`);
@@ -248,8 +263,8 @@ api.get("/jobs", async (c) => {
   }
 
   const orderBy = SORTS[q.sort ?? ""] ?? SORTS.rank;
-  const sql = `SELECT * FROM jobs ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY ${orderBy} LIMIT 1000`;
-  const [jobs, counts, rec, termRows] = await Promise.all([
+  const sql = `SELECT *${q.loops ? `, ${LOOP_STAGE_COL}` : ""} FROM jobs ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY ${orderBy} LIMIT 1000`;
+  const [jobs, counts, rec, termRows, loopsN] = await Promise.all([
     c.env.DB.prepare(sql).bind(...binds).all<JobRow>(),
     c.env.DB.prepare("SELECT phase, COUNT(*) AS n FROM jobs GROUP BY phase").all<{ phase: string; n: number }>(),
     c.env.DB.prepare(`SELECT
@@ -259,6 +274,11 @@ api.get("/jobs", async (c) => {
         SUM(CASE WHEN ${TIER_WHERE.look} THEN 1 ELSE 0 END) AS look
       FROM jobs`).first<{ top: number; rec: number; foryou: number; look: number }>(),
     c.env.DB.prepare("SELECT DISTINCT term FROM jobs WHERE term != ''").all<{ term: string }>(),
+    c.env.DB.prepare(`SELECT
+        SUM(CASE WHEN ${LOOP_SPLIT.none} THEN 1 ELSE 0 END) AS none,
+        SUM(CASE WHEN ${LOOP_SPLIT.oa} THEN 1 ELSE 0 END) AS oa,
+        SUM(CASE WHEN ${LOOP_SPLIT.interview} THEN 1 ELSE 0 END) AS interview
+      FROM jobs WHERE phase IN ('rejected','withdrawn')`).first<{ none: number; oa: number; interview: number }>(),
   ]);
   const termSet = new Set<string>();
   for (const r of termRows.results) {
@@ -269,6 +289,7 @@ api.get("/jobs", async (c) => {
     counts: Object.fromEntries(counts.results.map((r) => [r.phase, r.n])),
     tiers: { top: rec?.top ?? 0, rec: rec?.rec ?? 0, foryou: rec?.foryou ?? 0, look: rec?.look ?? 0 },
     recommended: (rec?.top ?? 0) + (rec?.rec ?? 0),
+    loop_split: { none: loopsN?.none ?? 0, oa: loopsN?.oa ?? 0, interview: loopsN?.interview ?? 0 },
     terms: [...termSet].sort(),
   });
 });
