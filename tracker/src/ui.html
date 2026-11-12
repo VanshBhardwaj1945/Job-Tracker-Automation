@@ -302,6 +302,23 @@
   .tabsep { width: 1px; align-self: stretch; background: var(--stroke2); margin: 5px 6px; }
   .tabsub { margin-top: 6px; padding: 0 3px; }
   .tabsub .tab { font-size: 12px; padding: 5px 10px; }
+  /* age pills: a third row under the In process tabs (Applied / OA / Interview) */
+  #agebar:empty { display: none; }
+  .agetiles { margin-top: 6px; padding: 0 3px; gap: 5px; }
+  .agetiles .tab { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px;
+    border: 1px solid var(--stroke); font-size: 11.5px; color: var(--muted); }
+  .agetiles .agelabel { color: var(--dim); font-size: 11px; margin-right: 2px; align-self: center; }
+  .agedot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--dim); }
+  .agedot.green { background: var(--green); } .agedot.blue { background: var(--accent2); }
+  .agedot.amber { background: var(--amber); } .agedot.red { background: var(--red); }
+  @media (max-width: 740px) {
+    /* the tab nav moves into the drawer on phones, so the pills get their own swipeable bar */
+    #agebar { margin: 2px -14px 10px; }
+    .agetiles { flex-wrap: nowrap; overflow-x: auto; padding: 0 14px 2px; margin-top: 0; scrollbar-width: none; }
+    .agetiles::-webkit-scrollbar { display: none; }
+    .agetiles .tab { flex: none; height: 30px; font-size: 12.5px; padding: 0 12px; border-radius: 15px; }
+    .agetiles .agelabel { display: none; }
+  }
   .tabmenu, .phonehead { display: none; }
   /* z-index 45: the riseIn animation (fill:both) makes .filters and .tablecard
      sibling stacking contexts, so without this the msel dropdown paints UNDER
@@ -905,6 +922,7 @@
     <!-- ── TRACKER ─────────────────────────────────────────────────────── -->
     <main id="page-tracker">
       <div class="tabnav" id="tabs"></div>
+      <div id="agebar"></div>
       <div class="filters">
         <input id="search" type="search" placeholder="Search company / title…">
         <button id="filterBtn" class="filterbtn" type="button" aria-label="Show filters"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>
@@ -1209,7 +1227,7 @@ const skelRows = (n = 6) => Array.from({ length: n }, () =>
 const skelCards = (n = 6) =>
   '<div class="kpis">' + Array.from({ length: 5 }, () => '<div class="skel" style="height:82px"></div>').join("") + '</div>' +
   '<div class="grid">' + Array.from({ length: n }, () => '<div class="skel skel-card"></div>').join("") + '</div>';
-const state = { page:"tracker", tab:"top", q:"", sort:"rank", watchlist:"",
+const state = { age:"all", allJobs:[], page:"tracker", tab:"top", q:"", sort:"rank", watchlist:"",
                 cats:[], catEx:false, catSel:new Set(), // catSel = selected LEAF ids; cats = query cover
                 terms:[], termEx:false, terms_all:[],
                 anScope:"all", // analytics scope: "all" | "applied" | node id
@@ -1324,7 +1342,7 @@ function applyBucket(id, name) {   // optimistic assign/move/remove
   if (j) { j.bucket = name; renderRows(); }
   closeBucketMenu();
   if (state.bucket && name !== state.bucket) { // dropped out of the bucket being viewed
-    state.jobs = state.jobs.filter(x => x.id !== id); renderRows();
+    state.jobs = state.jobs.filter(x => x.id !== id); state.allJobs = state.allJobs.filter(x => x.id !== id); renderRows();
   }
   toast(name ? "Saved to " + name : "Removed from bucket");
   apiCall("/jobs/" + id, { method:"PATCH", body: JSON.stringify({ bucket: name }) })
@@ -1442,6 +1460,35 @@ function setPage(p) {
 document.querySelectorAll(".nav").forEach(n => n.onclick = () => setPage(n.dataset.page));
 
 /* ── tracker ────────────────────────────────────────────────────────────── */
+// Age pills: on the In process tabs, split the rows by how long ago you applied
+// (Applied) or last heard back (OA, Interview; falls back to the applied date when
+// the list carries no event timestamps). The pill filters the loaded rows client-side.
+// Tile = [key, label, hover text, min days, max days, dot color].
+const heardTs = j => { const t = j.last_event_type || ""; return ((t === "phase_change" || t.startsWith("email_")) ? j.last_event_ts : null) || j.applied_at || j.created_at; };
+const AGE_TABS = {
+  applied:   { label: "Applied",    by: j => j.applied_at || j.created_at,
+               tiles: [["recent","Recent","0-14 days",0,14,"green"],["waiting","Waiting","15-30 days",15,30,"blue"],["quiet","Quiet","31-60 days",31,60,"amber"],["cold","Cold","61+ days",61,Infinity,"red"]] },
+  oa:        { label: "Last heard", by: heardTs,
+               tiles: [["new","New","0-3 days",0,3,"red"],["week","This week","4-7 days",4,7,"amber"],["weeks","1 to 3 weeks","8-21 days",8,21,"blue"],["old","Old","22+ days",22,Infinity,""]] },
+  interview: { label: "Last heard", by: heardTs,
+               tiles: [["active","Active","0-7 days",0,7,"green"],["nudge","Nudge","8-21 days",8,21,"amber"],["quiet","Gone quiet","22+ days",22,Infinity,"red"]] },
+};
+const ageDays = ts => { const d = new Date(ts); return ts && !isNaN(d) ? Math.max(0, Math.floor((Date.now() - d) / 864e5)) : null; };
+function ageKey(j) {
+  const cfg = AGE_TABS[state.tab]; if (!cfg) return null;
+  const d = ageDays(cfg.by(j)); if (d == null) return null;
+  return (cfg.tiles.find(t => d >= t[3] && d <= t[4]) || [null])[0];
+}
+const ageFilter = rows => (!AGE_TABS[state.tab] || state.age === "all") ? rows : rows.filter(j => ageKey(j) === state.age);
+function ageTilesHtml() {
+  const cfg = AGE_TABS[state.tab]; if (!cfg) return "";
+  const all = state.allJobs || [];
+  const label = cfg.label === "Last heard" && !all.some(j => j.last_event_ts) ? "Applied" : cfg.label;
+  const pill = (k, name, tip, n, tone) =>
+    `<div class="tab ${state.age === k ? "active" : ""}" data-age="${k}"${tip ? ` title="${tip}"` : ""}><i class="agedot ${tone}"></i>${name}<span class="n">${n}</span></div>`;
+  return `<div class="tabs tabsub agetiles"><span class="agelabel">${label}</span>` + pill("all", "Any time", "", all.length, "")
+    + cfg.tiles.map(t => pill(t[0], t[1], t[2], all.filter(j => ageKey(j) === t[0]).length, t[5])).join("") + `</div>`;
+}
 async function load() {
   const tab = TABS.find(t => t.key === state.tab);
   const p = new URLSearchParams();
@@ -1456,7 +1503,7 @@ async function load() {
   p.set("sort", state.sort);
   if (!state.jobs.length) $("rows").innerHTML = skelRows();
   const data = await apiCall("/jobs?" + p);
-  state.jobs = data.jobs; state.counts = data.counts; state.tiers = data.tiers || {};
+  state.allJobs = data.jobs; state.jobs = ageFilter(data.jobs); state.counts = data.counts; state.tiers = data.tiers || {};
   state.loops = data.loop_split || {};
   if (data.terms) state.terms_all = data.terms;
   state.selected.clear();            // selection is per-view; a fresh query resets it
@@ -1541,8 +1588,14 @@ function renderTabs() {
   $("tabs").innerHTML = `<div class="tabs glass tabtop">${top}</div>`
     + (sub ? `<div class="tabs tabsub">${sub}</div>` : "")
     + `<div class="tabmenu">${menu}</div>`;
+  $("agebar").innerHTML = ageTilesHtml();
+  $("agebar").querySelectorAll("[data-age]").forEach(el => el.onclick = () => {
+    state.age = el.dataset.age; state.jobs = ageFilter(state.allJobs);
+    state.selected.clear(); renderTabs(); renderRows();
+  });
   const go = (key) => {
     if (state.page !== "tracker") setPage("tracker");
+    if (state.tab !== key) state.age = "all";
     state.tab = key; load();
   };
   $("tabs").querySelectorAll("[data-tab]").forEach(el => el.onclick = () => go(el.dataset.tab));
@@ -1618,7 +1671,7 @@ function renderRows() {
         state.counts[sel.value] = (state.counts[sel.value] || 0) + 1;
         const tab = TABS.find(t => t.key === state.tab);
         if (tab && !tab.rec && tab.phases && !tab.phases.split(",").includes(sel.value)) {
-          state.jobs = state.jobs.filter(x => x.id !== sel.dataset.id);
+          state.jobs = state.jobs.filter(x => x.id !== sel.dataset.id); state.allJobs = state.allJobs.filter(x => x.id !== sel.dataset.id);
         }
         renderTabs(); renderRows();
       }
@@ -1629,7 +1682,7 @@ function renderRows() {
   });
   tb.querySelectorAll(".nope").forEach(el => el.onclick = (e) => {
     e.stopPropagation();
-    state.jobs = state.jobs.filter(x => x.id !== el.dataset.id);
+    state.jobs = state.jobs.filter(x => x.id !== el.dataset.id); state.allJobs = state.allJobs.filter(x => x.id !== el.dataset.id);
     state.counts.found = Math.max(0, (state.counts.found || 1) - 1);
     state.counts.not_applying = (state.counts.not_applying || 0) + 1;
     renderTabs(); renderRows();
